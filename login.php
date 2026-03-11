@@ -7,7 +7,7 @@
     <title>Login</title>
 </head>
 <body>
-    <div class="container p-5 my-5 border">
+    <div>
         <form method="post" class="form-inputs">
             <input type="email" name="email" placeholder="Email" required>
             <input type="password" name="password" placeholder="Password" required>
