@@ -1,0 +1,52 @@
+@import "style.css";
+
+header {
+    width: 100%;
+    background-color: var(--govuk-blue);
+    overflow: hidden;
+    line-height: 50px;
+    font-size: 20px;
+    color: var(--govuk-white);
+}
+
+header a {
+    float: left;
+    display: block;
+    text-align: center;
+    padding: 14px 16px;
+    text-decoration: none;
+    color: var(--govuk-white);
+}
+
+.item {
+    float: left;
+    overflow: hidden;
+}
+
+.ukhsa-logo-item{
+    font-weight: 700;
+}
+
+.logout-item{
+    float: right;
+}
+
+.btn-logout{
+    margin-right: 50px;
+    margin-top: 23px;
+    padding: 5px;
+    width: 115px;
+    background-color: var(--govuk-white);
+    color: var(--govuk-black);
+    border-radius: 50px;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: var(--govuk-font);
+    border: none;
+    cursor: pointer;
+    position: relative;
+}
+
+.option{
+    color: var(--govuk-grey-light);
+}
