@@ -17,7 +17,7 @@ if (empty($username) || empty($password)) {
     exit();
 }
 
-$query = "
+$query = '
     SELECT 
         user_id, 
         username, 
@@ -29,9 +29,9 @@ $query = "
         job_type,
         training_completed,
         training_expiry
-    FROM users
+    FROM "User"
     WHERE LOWER(username) = LOWER($1)
-";
+';
 
 $result = pg_query_params($conn, $query, [$username]);
 
@@ -58,13 +58,14 @@ if ($user && password_verify($password, $user['password_hash'])) {
     $_SESSION['training_completed'] = $user['training_completed'];
     $_SESSION['training_expiry']    = $user['training_expiry'];
 
-    $log_query = "
-        INSERT INTO audit_logs (user_id, action, target_table, target_id)
-        VALUES ($1, $2, 'users', $3)
-    ";
-    pg_query_params($conn, $log_query, [
+    $log_query = '
+        INSERT INTO "Audit_Log" (user_id, action, target_table, target_id)
+        VALUES ($1, $2, $3, $4)
+    ';
+    @pg_query_params($conn, $log_query, [
         $user['user_id'],
         'LOGIN: ' . $user['system_role'],
+        'User',
         $user['user_id']
     ]);
 
@@ -79,12 +80,15 @@ if ($user && password_verify($password, $user['password_hash'])) {
     $_SESSION['login_error']    = 'Invalid username or password.';
     $_SESSION['login_username'] = $username;
 
-    $log_query = "
-        INSERT INTO audit_logs (user_id, action, target_table)
-        VALUES (NULL, $1, 'users')
-    ";
-    pg_query_params($conn, $log_query, [
-        'LOGIN_FAILED: ' . $username
+    $log_query = '
+        INSERT INTO "Audit_Log" (user_id, action, target_table, target_id)
+        VALUES ($1, $2, $3, $4)
+    ';
+    @pg_query_params($conn, $log_query, [
+        null,
+        'LOGIN_FAILED: ' . $username,
+        'User',
+        null
     ]);
 
     header('Location: ../login.php');

@@ -3,12 +3,14 @@ session_start();
 require_once '../config/db_connect.php';
 
 if (isset($_SESSION['user_id'])) {
-    $log_query = "
-        INSERT INTO audit_logs (user_id, action, target_table, target_id)
-        VALUES ($1, 'LOGOUT', 'users', $2)
-    ";
-    pg_query_params($conn, $log_query, [
+    $log_query = '
+        INSERT INTO "Audit_Log" (user_id, action, target_table, target_id)
+        VALUES ($1, $2, $3, $4)
+    ';
+    @pg_query_params($conn, $log_query, [
         $_SESSION['user_id'],
+        'LOGOUT',
+        'User',
         $_SESSION['user_id']
     ]);
 }
