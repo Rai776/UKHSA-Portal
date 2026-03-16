@@ -70,9 +70,9 @@ if ($user && password_verify($password, $user['password_hash'])) {
     ]);
 
     if ($user['system_role'] === 'Administrator') {
-        header('Location: ../admin_dashboard.php');
+        header('Location: ../admin/dashboard.php');
     } else {
-        header('Location: ../user_dashboard.php');
+        header('Location: ../user/dashboard.php');
     }
     exit();
 

@@ -3,9 +3,9 @@ session_start();
 
 if (isset($_SESSION['user_id'])) {
     if ($_SESSION['role'] === 'Administrator') {
-        header('Location: admin_dashboard.php');
+        header('Location: admin/dashboard.php');
     } else {
-        header('Location: user_dashboard.php');
+        header('Location: user/dashboard.php');
     }
     exit();
 }

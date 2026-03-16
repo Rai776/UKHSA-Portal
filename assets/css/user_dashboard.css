@@ -1,0 +1,95 @@
+@font-face {
+    font-family: "GDS Transport";
+    src: url("../fonts/GDSTransport.woff2") format("woff2");
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "GDS Transport";
+    src: url("../fonts/GDSTransport-Bold.woff2") format("woff2");
+    font-weight: 700;
+    font-display: swap;
+}
+
+:root {
+    --govuk-blue: #1D70B8;
+    --govuk-blue-dark: #003078;
+    --govuk-black: #0b0c0c;
+    --govuk-white: #ffffff;
+    --govuk-grey-light: #f3f2f1;
+    --govuk-grey-mid: #b1b4b6;
+    --govuk-grey-dark: #505a5f;
+    --govuk-font: "GDS Transport", Arial, Helvetica, sans-serif;
+}
+
+.dashboard-main {
+    padding: 2rem 1.5rem;
+    background-color: var(--govuk-grey-light);
+    min-height: calc(100vh - 60px);
+}
+
+.dashboard-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.welcome-card {
+    background-color: var(--govuk-white);
+    border-top: 5px solid var(--govuk-blue);
+    padding: 2rem;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.welcome-card h1 {
+    font-family: var(--govuk-font);
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--govuk-black);
+    margin-bottom: 0.5rem;
+}
+
+.welcome-card p {
+    font-family: var(--govuk-font);
+    font-size: 0.95rem;
+    color: var(--govuk-grey-dark);
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+}
+
+.welcome-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--govuk-grey-light);
+}
+
+.detail-item {
+    font-family: var(--govuk-font);
+    font-size: 0.875rem;
+    color: var(--govuk-black);
+}
+
+.detail-item strong {
+    color: var(--govuk-blue-dark);
+}
+
+@media (max-width: 600px) {
+    .dashboard-main {
+        padding: 1rem;
+    }
+
+    .welcome-card {
+        padding: 1.25rem;
+    }
+
+    .welcome-card h1 {
+        font-size: 1.35rem;
+    }
+
+    .welcome-details {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}
