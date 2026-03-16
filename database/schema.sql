@@ -6,7 +6,7 @@
 -- ==============================
 -- USERS TABLE
 -- ==============================
-CREATE TABLE users (
+CREATE TABLE User (
     user_id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
@@ -29,11 +29,12 @@ CREATE TABLE users (
 -- ==============================
 -- DATASETS TABLE
 -- ==============================
-CREATE TABLE datasets (
+CREATE TABLE Dataset (
     dataset_id SERIAL PRIMARY KEY,
 
     name VARCHAR(100) UNIQUE NOT NULL,
     description TEXT,
+    category TEXT NOT NULL
 
     sensitivity VARCHAR(20) NOT NULL
         CHECK (sensitivity IN ('Sensitive','Non-sensitive')),
@@ -45,7 +46,7 @@ CREATE TABLE datasets (
 -- ACCESS REQUESTS TABLE
 -- (Also stores active permissions)
 -- ==============================
-CREATE TABLE access_requests (
+CREATE TABLE Access_Request (
     request_id SERIAL PRIMARY KEY,
 
     user_id INT NOT NULL,
@@ -91,7 +92,7 @@ CREATE TABLE access_requests (
 -- ==============================
 -- RULES TABLE
 -- ==============================
-CREATE TABLE rules (
+CREATE TABLE Rules (
     rule_id SERIAL PRIMARY KEY,
 
     dataset_id INT,
@@ -110,7 +111,7 @@ CREATE TABLE rules (
 -- ==============================
 -- AUDIT LOG TABLE
 -- ==============================
-CREATE TABLE audit_logs (
+CREATE TABLE Audit_log (
     log_id SERIAL PRIMARY KEY,
 
     user_id INT,
