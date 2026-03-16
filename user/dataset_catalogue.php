@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db_connect.php';
+include("navbar.php");
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: ../login.php');
