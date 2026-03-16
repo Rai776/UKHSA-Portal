@@ -1,9 +1,22 @@
 <?php
 session_start();
 
-$error = '';
-$success = '';
-$username_value = '';
+if (isset($_SESSION['user_id'])) {
+    if ($_SESSION['role'] === 'Administrator') {
+        header('Location: admin_dashboard.php');
+    } else {
+        header('Location: user_dashboard.php');
+    }
+    exit();
+}
+
+$error          = $_SESSION['login_error'] ?? '';
+$success        = $_SESSION['login_success'] ?? '';
+$username_value = $_SESSION['login_username'] ?? '';
+
+unset($_SESSION['login_error']);
+unset($_SESSION['login_success']);
+unset($_SESSION['login_username']);
 
 if (isset($_GET['logout']) && $_GET['logout'] === 'success') {
     $success = 'You have been successfully logged out.';
@@ -55,7 +68,7 @@ if (isset($_GET['expired'])) {
                 </div>
                 <?php endif; ?>
 
-                <form method="POST" action="login.php">
+                <form method="POST" action="actions/login_action.php">
                     <div class="form-group">
                         <label for="username">Username</label>
                         <input 

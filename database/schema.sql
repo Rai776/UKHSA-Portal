@@ -34,6 +34,7 @@ CREATE TABLE datasets (
 
     name VARCHAR(100) UNIQUE NOT NULL,
     description TEXT,
+    category TEXT NOT NULL
 
     sensitivity VARCHAR(20) NOT NULL
         CHECK (sensitivity IN ('Sensitive','Non-sensitive')),
