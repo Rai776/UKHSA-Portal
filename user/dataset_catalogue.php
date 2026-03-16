@@ -1,9 +1,9 @@
 <?php
 session_start();
-require_once 'config/db_connect.php';
+require_once '../config/db_connect.php';
 
 if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
+    header('Location: ../login.php');
     exit();
 }
 
@@ -92,7 +92,7 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="assets/css/dataset_catalogue.css" />
+    <link rel="stylesheet" href="../assets/css/dataset_catalogue.css" />
     <title>Dataset Catalogue — UKHSA Data Governance Portal</title>
 </head>
 <body>
@@ -295,7 +295,7 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                 <button type="button" class="modal-close" onclick="closeModal()">&times;</button>
             </div>
 
-            <form method="POST" action="actions/request_action.php">
+            <form method="POST" action="../actions/request_action.php">
                 <div class="modal-body">
                     <div class="form-group">
                         <label for="modal_dataset_name">Dataset Name</label>
