@@ -100,7 +100,6 @@ $auto_approve = false;
 if ($rule) {
     $auto_approve = ($rule['auto_approve'] === 't');
 } else {
-    // Fallback: auto-approve non-sensitive datasets
     $auto_approve = ($dataset['sensitivity'] === 'Non-sensitive');
 }
 
