@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db_connect.php';
+include("navbar.php");
 
 $expire_query = '
     UPDATE "Access_Request"
@@ -130,8 +131,6 @@ $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
     <title>My Requests — UKHSA Data Governance Portal</title>
 </head>
 <body>
-
-    <?php include("navbar.php"); ?>
 
     <main class="page-main">
         <div class="page-container">
