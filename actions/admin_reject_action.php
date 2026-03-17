@@ -1,0 +1,97 @@
+<?php
+session_start();
+require_once '../config/db_connect.php';
+
+
+if (!isset($_SESSION['user_id'])) {
+    header('Location: ../login.php');
+    exit();
+}
+
+if ($_SESSION['role'] !== 'Administrator') {
+    header('Location: ../user/dashboard.php');
+    exit();
+}
+
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Location: ../admin/manage_requests.php');
+    exit();
+}
+
+$request_id = intval($_POST['request_id'] ?? 0);
+$reason     = trim($_POST['rejection_reason'] ?? '');
+
+if ($request_id <= 0) {
+    $_SESSION['admin_error'] = 'Invalid request.';
+    header('Location: ../admin/manage_requests.php');
+    exit();
+}
+
+if (empty($reason) || strlen($reason) < 10) {
+    $_SESSION['admin_error'] = 'Please provide a reason for rejection (at least 10 characters).';
+    header('Location: ../admin/manage_requests.php');
+    exit();
+}
+
+
+$check_query = '
+    SELECT ar.request_id, ar.user_id, ar.dataset_id, ar.request_status,
+           u.full_name, d.name as dataset_name, d.sensitivity
+    FROM "Access_Request" ar
+    JOIN "User" u ON ar.user_id = u.user_id
+    JOIN "Dataset" d ON ar.dataset_id = d.dataset_id
+    WHERE ar.request_id = $1
+      AND d.sensitivity = $2
+';
+$check_result = pg_query_params($conn, $check_query, [$request_id, 'Sensitive']);
+$request = pg_fetch_assoc($check_result);
+
+if (!$request) {
+    $_SESSION['admin_error'] = 'Request not found or not a sensitive dataset request.';
+    header('Location: ../admin/manage_requests.php');
+    exit();
+}
+
+if ($request['request_status'] !== 'Pending') {
+    $_SESSION['admin_error'] = 'This request has already been ' . strtolower($request['request_status']) . '.';
+    header('Location: ../admin/manage_requests.php');
+    exit();
+}
+
+
+$update_query = '
+    UPDATE "Access_Request"
+    SET request_status = $1,
+        approved_date = CURRENT_TIMESTAMP,
+        approval_reason = $2
+    WHERE request_id = $3
+';
+$update_result = pg_query_params($conn, $update_query, [
+    'Rejected',
+    $reason,
+    $request_id
+]);
+
+if (!$update_result) {
+    $_SESSION['admin_error'] = 'Failed to reject request. Please try again.';
+    header('Location: ../admin/manage_requests.php');
+    exit();
+}
+
+
+$log_query = '
+    INSERT INTO "Audit_Log" (user_id, action, target_table, target_id)
+    VALUES ($1, $2, $3, $4)
+';
+@pg_query_params($conn, $log_query, [
+    $_SESSION['user_id'],
+    'REJECTED: Admin rejected sensitive access for "' . $request['full_name'] . '" to dataset "' . $request['dataset_name'] . '" — Reason: ' . $reason,
+    'Access_Request',
+    $request_id
+]);
+
+$_SESSION['admin_success'] = 'Sensitive request from "' . $request['full_name'] . '" for "' . $request['dataset_name'] . '" has been rejected.';
+header('Location: ../admin/manage_requests.php');
+exit();
+?>
