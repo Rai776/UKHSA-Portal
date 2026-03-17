@@ -41,12 +41,6 @@ $check_result = pg_query_params($conn, $check_query, [
     'Approved'
 ]);
 
-if (!$check_result) {
-    $_SESSION['request_error'] = 'A system error occurred.';
-    header('Location: ../user/my_requests.php');
-    exit();
-}
-
 $request = pg_fetch_assoc($check_result);
 
 if (!$request) {
@@ -73,41 +67,88 @@ if (pg_fetch_assoc($pending_result)) {
     exit();
 }
 
-$insert_query = '
-    INSERT INTO "Access_Request" (
-        user_id, dataset_id, access_type, purpose, 
-        request_status, request_date
-    ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-    RETURNING request_id
+$rule_query = '
+    SELECT auto_approve FROM "Rules" WHERE dataset_id = $1
 ';
-$insert_result = pg_query_params($conn, $insert_query, [
-    $_SESSION['user_id'],
-    $request['dataset_id'],
-    'Read',
-    'RENEWAL: ' . $purpose,
-    'Pending'
-]);
+$rule_result = pg_query_params($conn, $rule_query, [$request['dataset_id']]);
+$rule = pg_fetch_assoc($rule_result);
 
-if (!$insert_result) {
-    $_SESSION['request_error'] = 'Failed to submit renewal. Please try again.';
-    header('Location: ../user/my_requests.php');
-    exit();
+$auto_approve = false;
+if ($rule) {
+    $auto_approve = ($rule['auto_approve'] === 't');
+} else {
+    $auto_approve = ($request['sensitivity'] === 'Non-sensitive');
 }
 
-$new_request = pg_fetch_assoc($insert_result);
+if ($auto_approve) {
+    $update_query = '
+        UPDATE "Access_Request"
+        SET expiry_date = (CURRENT_DATE + INTERVAL \'6 months\')::DATE,
+            approved_date = CURRENT_TIMESTAMP,
+            purpose = $1
+        WHERE request_id = $2
+    ';
+    $update_result = pg_query_params($conn, $update_query, [
+        'RENEWAL: ' . $purpose,
+        $request_id
+    ]);
 
-$log_query = '
-    INSERT INTO "Audit_Log" (user_id, action, target_table, target_id)
-    VALUES ($1, $2, $3, $4)
-';
-@pg_query_params($conn, $log_query, [
-    $_SESSION['user_id'],
-    'RENEWAL_REQUEST: Requested renewal for "' . $request['dataset_name'] . '" (' . $request['sensitivity'] . ')',
-    'Access_Request',
-    $new_request['request_id']
-]);
+    if (!$update_result) {
+        $_SESSION['request_error'] = 'Failed to renew. Please try again.';
+        header('Location: ../user/my_requests.php');
+        exit();
+    }
 
-$_SESSION['request_success'] = 'Your renewal request for "' . $request['dataset_name'] . '" has been submitted. An administrator will review it.';
+    $log_query = '
+        INSERT INTO "Audit_Log" (user_id, action, target_table, target_id)
+        VALUES ($1, $2, $3, $4)
+    ';
+    @pg_query_params($conn, $log_query, [
+        $_SESSION['user_id'],
+        'AUTO_RENEWED: Access to "' . $request['dataset_name'] . '" (Non-sensitive) renewed for 6 months',
+        'Access_Request',
+        $request_id
+    ]);
+
+    $_SESSION['request_success'] = 'Access to "' . $request['dataset_name'] . '" has been automatically renewed for 6 months!';
+} else {
+    $insert_query = '
+        INSERT INTO "Access_Request" (
+            user_id, dataset_id, access_type, purpose,
+            request_status, request_date
+        ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+        RETURNING request_id
+    ';
+    $insert_result = pg_query_params($conn, $insert_query, [
+        $_SESSION['user_id'],
+        $request['dataset_id'],
+        'Read',
+        'RENEWAL: ' . $purpose,
+        'Pending'
+    ]);
+
+    if (!$insert_result) {
+        $_SESSION['request_error'] = 'Failed to submit renewal. Please try again.';
+        header('Location: ../user/my_requests.php');
+        exit();
+    }
+
+    $new_request = pg_fetch_assoc($insert_result);
+
+    $log_query = '
+        INSERT INTO "Audit_Log" (user_id, action, target_table, target_id)
+        VALUES ($1, $2, $3, $4)
+    ';
+    @pg_query_params($conn, $log_query, [
+        $_SESSION['user_id'],
+        'RENEWAL_REQUEST: Requested renewal for "' . $request['dataset_name'] . '" (Sensitive) — awaiting admin approval',
+        'Access_Request',
+        $new_request['request_id']
+    ]);
+
+    $_SESSION['request_success'] = 'Your renewal request for "' . $request['dataset_name'] . '" has been submitted. This dataset is Sensitive and requires administrator approval.';
+}
+
 header('Location: ../user/my_requests.php');
 exit();
 ?>

@@ -3,6 +3,16 @@ session_start();
 require_once '../config/db_connect.php';
 include("navbar.php");
 
+$expire_query = '
+    UPDATE "Access_Request"
+    SET request_status = \'Rejected\',
+        approval_reason = \'Access expired automatically on \' || expiry_date::TEXT
+    WHERE request_status = \'Approved\'
+    AND expiry_date IS NOT NULL
+    AND expiry_date < CURRENT_DATE
+';
+$expire_result = pg_query($conn, $expire_query);
+
 if (!isset($_SESSION['user_id'])) {
     header('Location: ../login.php');
     exit();
