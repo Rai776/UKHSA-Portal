@@ -1,6 +1,7 @@
 @import "style.css";
 
 header {
+    font-family: var(--govuk-font);
     width: 100%;
     background-color: var(--govuk-blue);
     overflow: hidden;
