@@ -261,7 +261,7 @@ $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
                                     </span>
                                 </td>
                                 <td class="date-cell">
-                                    <?php echo date('d M Y', strtotime($req['request_date'])); ?>
+                                    <?php echo date('d M Y', strtotime($req['approved_date'])); ?>
                                 </td>
                                 <td class="date-cell">
                                     <?php if ($req['expiry_date']): ?>

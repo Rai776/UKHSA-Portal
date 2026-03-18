@@ -5,10 +5,10 @@ if (session_status() === PHP_SESSION_NONE) {
 ?>
 <header>
     <div class="navbar">
-        <div class="navbar-brand">
-            <a>UKHSA</a>
+        <div>
+            <a class="ukhsa-logo-item">UKHSA</a>
         </div>
-        <div class="navbar-user">
+        <div class="item">
             <a><?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Admin'); ?></a>
         </div>
         <div>

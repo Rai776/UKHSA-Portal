@@ -16,25 +16,25 @@ if (session_status() === PHP_SESSION_NONE) {
 <body>
     <header>
         <div class="navbar">
-            <div class="navbar-brand">
-                <a>UKHSA</a>
+            <div>
+                <a class="ukhsa-logo-item">UKHSA</a>
             </div>
-            <div class="navbar-user">
+            <div class="item" >
                 <a><?php echo htmlspecialchars($_SESSION['full_name'] ?? 'User'); ?></a>
             </div>
             <div>
-                <a href="dashboard.php" class="option">
-                    <div class="material-icons">home</div> Dashboard
+                <a href="dashboard.php" class="option" >
+                    <div class="material-icons">home</div>Dashboard
                 </a>
             </div>
             <div>
                 <a href="dataset_catalogue.php" class="option">
-                    <div class="material-icons">library_books</div> Home / Catalogue
+                    <div class="material-icons">library_books</div>Home / Catalogue
                 </a>
             </div>
             <div>
                 <a href="my_requests.php" class="option">
-                    <div class="material-icons">subject</div> My Requests
+                    <div class="material-icons">subject</div>My Requests
                 </a>
             </div>
             <div class="logout-item">
