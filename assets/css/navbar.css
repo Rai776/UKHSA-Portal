@@ -31,6 +31,10 @@ header a {
     border-right: var(--govuk-white) 5px solid;
 }
 
+.icon-item{
+    vertical-align: middle;
+}
+
 .logout-item{
     float: right;
     border-left: var(--govuk-white) 5px solid;

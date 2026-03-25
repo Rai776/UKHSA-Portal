@@ -13,22 +13,22 @@ if (session_status() === PHP_SESSION_NONE) {
         </div>
         <div>
             <a href="dashboard.php" class="option">
-                <div class="material-icons">dashboard</div> Dashboard
+                <div class="material-icons icon-item">dashboard</div> Dashboard
             </a>
         </div>
         <div>
             <a href="manage_requests.php" class="option">
-                <div class="material-icons">pending_actions</div> Manage Requests
+                <div class="material-icons icon-item">pending_actions</div> Manage Requests
             </a>
         </div>
         <div>
             <a href="dataset_rules.php" class="option">
-                <div class="material-icons">rule</div> Dataset & Rules
+                <div class="material-icons icon-item">rule</div> Dataset & Rules
             </a>
         </div>
         <div>
             <a href="audit_log.php" class="option">
-                <div class="material-icons">history</div> Audit Log
+                <div class="material-icons icon-item">history</div> Audit Log
             </a>
         </div>
         <div class="logout-item">

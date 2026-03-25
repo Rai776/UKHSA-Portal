@@ -24,17 +24,17 @@ if (session_status() === PHP_SESSION_NONE) {
             </div>
             <div>
                 <a href="dashboard.php" class="option" >
-                    <div class="material-icons">home</div>Dashboard
+                    <div class="material-icons icon-item">home</div> Dashboard
                 </a>
             </div>
             <div>
                 <a href="dataset_catalogue.php" class="option">
-                    <div class="material-icons">library_books</div>Home / Catalogue
+                    <div class="material-icons icon-item">library_books</div> Home / Catalogue
                 </a>
             </div>
             <div>
                 <a href="my_requests.php" class="option">
-                    <div class="material-icons">subject</div>My Requests
+                    <div class="material-icons icon-item">subject</div> My Requests
                 </a>
             </div>
             <div class="logout-item">
