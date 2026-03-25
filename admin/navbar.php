@@ -3,6 +3,8 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 ?>
+    <link rel="stylesheet" href="../assets/css/navbar.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <header>
     <div class="navbar">
         <div>
@@ -22,7 +24,7 @@ if (session_status() === PHP_SESSION_NONE) {
             </a>
         </div>
         <div>
-            <a href="dataset_rules.php" class="option">
+            <a href="rules_management.php" class="option">
                 <div class="material-icons icon-item">rule</div> Dataset & Rules
             </a>
         </div>

@@ -1,0 +1,45 @@
+@import "style.css";
+
+
+.table-wrapper {
+    background-color: var(--govuk-white);
+    border-top: 3px solid var(--govuk-blue);
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--govuk-font);
+    font-size: 0.875rem;
+}
+
+.data-table thead {
+    background-color: var(--govuk-grey-light);
+}
+
+.data-table thead th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 700;
+    color: var(--govuk-black);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--govuk-grey-mid);
+}
+
+.data-table tbody tr {
+    border-bottom: 1px solid var(--govuk-grey-light);
+    transition: background-color 0.1s ease;
+}
+
+.data-table tbody tr:hover {
+    background-color: #f8f8f8;
+}
+
+.data-table tbody td {
+    padding: 14px 16px;
+    color: var(--govuk-black);
+    vertical-align: middle;
+}
