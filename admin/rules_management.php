@@ -21,16 +21,6 @@ $expire_query = '
 ';
 $expire_result = pg_query($conn, $expire_query);
 
-if (!isset($_SESSION['user_id'])) {
-    header('Location: ../login.php');
-    exit();
-}
-
-$request_error   = $_SESSION['request_error'] ?? '';
-$request_success = $_SESSION['request_success'] ?? '';
-unset($_SESSION['request_error']);
-unset($_SESSION['request_success']);
-
 $search       = trim($_GET['search'] ?? '');
 $current_page = max(1, intval($_GET['page'] ?? 1));
 $per_page     = 5;
@@ -126,22 +116,8 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
             <p>Browse available datasets and create, update or delete datasets</p>
         </div>
 
-        <?php if (!empty($request_success)): ?>
-        <div class="alert alert-success">
-            <span>&#10003;</span>
-            <span><?php echo htmlspecialchars($request_success); ?></span>
-        </div>
-        <?php endif; ?>
-
-        <?php if (!empty($request_error)): ?>
-        <div class="alert alert-error">
-            <span>&#9888;</span>
-            <span><?php echo htmlspecialchars($request_error); ?></span>
-        </div>
-        <?php endif; ?>
-
         <div class="search-section">
-            <form method="GET" action="dataset_catalogue.php" class="search-form">
+            <form method="GET" action="rules_management.php" class="search-form">
                 <div class="search-wrapper">
                     <label for="search" class="search-label">Search datasets</label>
                     <div class="search-input-group">
@@ -165,7 +141,7 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                     result<?php echo $total_records !== 1 ? 's' : ''; ?> 
                     for "<strong><?php echo htmlspecialchars($search); ?></strong>"
                 </span>
-                <a href="dataset_catalogue.php" class="clear-search">Clear search</a>
+                <a href="rules_management.php" class="clear-search">Clear search</a>
             </div>
             <?php endif; ?>
         </div>
@@ -189,14 +165,14 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                         <th>Description</th>
                         <th>Category</th>
                         <th>Sensitivity</th>
-                        <th>Active</th>
+                        <th>Active?</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($datasets)): ?>
                     <tr>
-                        <td colspan="5" class="empty-row">
+                        <td colspan="6" class="empty-row">
                             <?php if (!empty($search)): ?>
                                 No datasets found matching "<?php echo htmlspecialchars($search); ?>".
                             <?php else: ?>
@@ -227,16 +203,23 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                             </td>
                             <td>
                                 <?php if ($dataset['active'] === 'True'): ?>
-                                    <span class="activity-badge active">Active</span>
+                                    <span class="activity-badge active">True</span>
                                 <?php else: ?>
-                                    <span class="activity-badge inactive">Inactive</span>
+                                    <span class="activity-badge inactive">False</span>
                                 <?php endif; ?>
                             </td>
                             <td>
                                 <button 
                                     type="button" 
                                     class="btn-update"
-                                    onclick="">Update</button>
+                                    onclick="openModal(
+                                            <?php echo $dataset['dataset_id']; ?>,
+                                            '<?php echo htmlspecialchars(addslashes($dataset['name'])); ?>',
+                                            '<?php echo htmlspecialchars($dataset['sensitivity']); ?>',
+                                            '<?php echo htmlspecialchars($dataset['description']); ?>',
+                                            '<?php echo htmlspecialchars($dataset['category']); ?>',
+                                            '<?php echo htmlspecialchars($dataset['active']); ?>'
+                                        )">Update</button>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -303,5 +286,98 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
             <?php endif; ?>
         </div>
 
+        <div class="modal-overlay" id="requestModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Update Details</h2>
+                <button type="button" class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+
+            <form method="POST" action="../actions/update_dataset.php">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="modal_dataset_name">
+                            Dataset Name <span class="required">*</span>
+                        </label>
+                        <input type="text" id="modal_dataset_name" name="name" required>
+                        <input type="hidden" name="dataset_id" id="modal_dataset_id">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modal_description">
+                            Description <span class="required">*</span>
+                        </label>
+                        <textarea 
+                            id="modal_description" 
+                            name="description" 
+                            rows="4" 
+                            required
+                        ></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modal_category">
+                            Category <span class="required">*</span>
+                        </label>
+                        <input type="text" id="modal_category" name="category" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modal_sensitivity">
+                            Sensitivity Level <span class="required">*</span>
+                        </label>
+                        <select id="modal_sensitivity" name="sensitivity" required>
+                            <option value="Sensitive">Sensitive</option>
+                            <option value="Non-sensitive">Non-sensitive</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modal_active">
+                            Active? <span class="required">*</span>
+                        </label>
+                        <select id="modal_active" name="active" required>
+                            <option value="True">True</option>
+                            <option value="False">False</option>
+                        </select>
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+                    <button type="submit" name="submit_request" class="btn-submit">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openModal(datasetId, datasetName, sensitivity, description, category, active) {
+            document.getElementById('modal_dataset_id').value = datasetId;
+            document.getElementById('modal_dataset_name').value = datasetName;
+            document.getElementById('modal_sensitivity').value = sensitivity;
+            document.getElementById('modal_description').value = description;
+            document.getElementById('modal_category').value = category;
+            document.getElementById('modal_active').value = active;
+            document.getElementById('requestModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('requestModal').classList.remove('active');
+        }
+
+        document.getElementById('requestModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
 </body>
 </html>
