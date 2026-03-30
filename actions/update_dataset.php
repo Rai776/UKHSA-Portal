@@ -28,10 +28,29 @@ if (isset($_POST['submit_request'])) {
     $result = pg_query_params($conn, $update_query, [$name, $sensitivity, $description, $category, $active, $dataset_id]);
 
     if ($result) {
+        if (isset($_SESSION['user_id'])) {
+            $log_query = '
+            INSERT INTO "Audit_Log" (user_id, action, target_table, target_id)
+            VALUES ($1, $2, $3, $4)';
+
+            $log_result = pg_query_params($conn, $log_query, [
+                $_SESSION['user_id'],
+                'DELETE',
+                'DATASET',
+                $dataset_id
+            ]);
+
+            if (!$log_result) {
+                die("Audit log failed: " . pg_last_error($conn));
+            }
+
+}
         header('Location: ../admin/rules_management.php?success=Dataset+updated');
         exit();
     } else {
         echo "Error updating dataset: " . pg_last_error($conn);
     }
 }
+
+
 ?>
