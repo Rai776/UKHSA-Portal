@@ -290,12 +290,22 @@
     background-color: #8b0000;
 }
 
+.btn-create:hover {
+    background-color: var(--govuk-blue-hover);
+    border-color: var(--govuk-blue-hover);
+}
+
 .btn-update:active {
     top: 2px;
     box-shadow: none;
 }
 
 .btn-delete:active {
+    top: 2px;
+    box-shadow: none;
+}
+
+.btn-create:active {
     top: 2px;
     box-shadow: none;
 }
@@ -308,6 +318,11 @@
 .btn-delete:focus {
     outline: 3px solid var(--govuk-focus);
     outline-offset: 3px;
+}
+
+.btn-create:focus {
+    outline: 3px solid var(--govuk-focus);
+    outline-offset: 0;
 }
 
 .pagination {
