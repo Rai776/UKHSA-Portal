@@ -111,9 +111,15 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
     include("navbar.php");
     ?>
     <div class="page-container">
-        <div class="page-header">
-            <h1>Dataset Controller</h1>
-            <p>Browse available datasets and create, update or delete datasets</p>
+        <div class="header-content">
+            <div class="page-header">
+                <h1>Dataset Controller</h1>
+                <p>Browse available datasets and create, update or delete datasets</p>
+            </div>
+
+            <button class="btn-create" onclick="openCreateModal()">
+                Create Dataset
+            </button>
         </div>
 
         <div class="search-section">
@@ -166,13 +172,13 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                         <th>Category</th>
                         <th>Sensitivity</th>
                         <th>Active?</th>
-                        <th>Action</th>
+                        <th colspan="2">Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($datasets)): ?>
                     <tr>
-                        <td colspan="6" class="empty-row">
+                        <td colspan="7" class="empty-row">
                             <?php if (!empty($search)): ?>
                                 No datasets found matching "<?php echo htmlspecialchars($search); ?>".
                             <?php else: ?>
@@ -212,7 +218,7 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                                 <button 
                                     type="button" 
                                     class="btn-update"
-                                    onclick="openModal(
+                                    onclick="openUpdateModal(
                                             <?php echo $dataset['dataset_id']; ?>,
                                             '<?php echo htmlspecialchars(addslashes($dataset['name'])); ?>',
                                             '<?php echo htmlspecialchars($dataset['sensitivity']); ?>',
@@ -220,6 +226,19 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                                             '<?php echo htmlspecialchars($dataset['category']); ?>',
                                             '<?php echo htmlspecialchars($dataset['active']); ?>'
                                         )">Update</button>
+                            </td>
+                            <td>
+                                <button 
+                                    type="button" 
+                                    class="btn-delete"
+                                    onclick="openDeleteModal(
+                                            <?php echo $dataset['dataset_id']; ?>,
+                                            '<?php echo htmlspecialchars(addslashes($dataset['name'])); ?>',
+                                            '<?php echo htmlspecialchars($dataset['sensitivity']); ?>',
+                                            '<?php echo htmlspecialchars($dataset['description']); ?>',
+                                            '<?php echo htmlspecialchars($dataset['category']); ?>',
+                                            '<?php echo htmlspecialchars($dataset['active']); ?>'
+                                        )">Delete</button>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -286,11 +305,11 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
             <?php endif; ?>
         </div>
 
-        <div class="modal-overlay" id="requestModal">
+        <div class="modal-overlay" id="updateModal">
         <div class="modal">
             <div class="modal-header">
                 <h2>Update Details</h2>
-                <button type="button" class="modal-close" onclick="closeModal()">&times;</button>
+                <button type="button" class="modal-close" onclick="closeUpdateModal()">&times;</button>
             </div>
 
             <form method="POST" action="../actions/update_dataset.php">
@@ -345,39 +364,152 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                 </div>
 
                 <div class="modal-footer">
-                    <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+                    <button type="button" class="btn-cancel" onclick="closeUpdateModal()">Cancel</button>
                     <button type="submit" name="submit_request" class="btn-submit">Update</button>
                 </div>
             </form>
         </div>
     </div>
 
+    <div class="modal-overlay" id="deleteModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Delete Dataset</h2>
+            <button type="button" class="modal-close" onclick="closeDeleteModal()">&times;</button>
+        </div>
+
+        <form method="POST" action="../actions/delete_dataset.php">
+            <div class="modal-body">
+                <p>Are you sure you want to delete this dataset?</p>
+                <input type="hidden" name="dataset_id" id="delete_dataset_id">
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+                <button type="submit" class="btn-delete">Delete</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal-overlay" id="createModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Create Dataset</h2>
+            <button type="button" class="modal-close" onclick="closeCreateModal()">&times;</button>
+        </div>
+
+        <form method="POST" action="../actions/create_dataset.php">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="create_dataset_name">
+                        Dataset Name <span class="required">*</span>
+                    </label>
+                    <input type="text" id="create_dataset_name" name="name" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_description">
+                        Description <span class="required">*</span>
+                    </label>
+                    <textarea 
+                        id="create_description" 
+                        name="description" 
+                        rows="4" 
+                        required
+                    ></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_category">
+                        Category <span class="required">*</span>
+                    </label>
+                    <input type="text" id="create_category" name="category" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_sensitivity">
+                        Sensitivity Level <span class="required">*</span>
+                    </label>
+                    <select id="create_sensitivity" name="sensitivity" required>
+                        <option value="Sensitive">Sensitive</option>
+                        <option value="Non-sensitive">Non-sensitive</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_active">
+                        Active? <span class="required">*</span>
+                    </label>
+                    <select id="create_active" name="active" required>
+                        <option value="True">True</option>
+                        <option value="False">False</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeCreateModal()">Cancel</button>
+                <button type="submit" name="submit_request" class="btn-submit">Create</button>
+            </div>
+        </form>
+    </div>
+
     <script>
-        function openModal(datasetId, datasetName, sensitivity, description, category, active) {
+        function openUpdateModal(datasetId, datasetName, sensitivity, description, category, active) {
             document.getElementById('modal_dataset_id').value = datasetId;
             document.getElementById('modal_dataset_name').value = datasetName;
             document.getElementById('modal_sensitivity').value = sensitivity;
             document.getElementById('modal_description').value = description;
             document.getElementById('modal_category').value = category;
             document.getElementById('modal_active').value = active;
-            document.getElementById('requestModal').classList.add('active');
+            document.getElementById('updateModal').classList.add('active');
         }
 
-        function closeModal() {
-            document.getElementById('requestModal').classList.remove('active');
+        function openDeleteModal(datasetId) {
+            document.getElementById('delete_dataset_id').value = datasetId;
+            document.getElementById('deleteModal').classList.add('active');
         }
 
-        document.getElementById('requestModal').addEventListener('click', function(e) {
+        function openCreateModal() {
+            document.getElementById('create_dataset_name').value = '';
+            document.getElementById('create_description').value = '';
+            document.getElementById('create_category').value = '';
+            document.getElementById('create_sensitivity').value = 'Sensitive';
+            document.getElementById('create_active').value = 'True';
+            document.getElementById('createModal').classList.add('active');
+        }
+        function closeUpdateModal() {
+            document.getElementById('updateModal').classList.remove('active');
+        }
+
+        document.getElementById('updateModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeModal();
             }
         });
 
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').classList.remove('active');
+        }
+
+        document.getElementById('deleteModal').addEventListener('click', function(e) {
+            if (e.target === this) {
                 closeModal();
             }
         });
+
+        function closeCreateModal() {
+        document.getElementById('createModal').classList.remove('active');
+    }
+
+    document.getElementById('createModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeCreateModal();
+        }
+    });
+
+
     </script>
 </body>
 </html>

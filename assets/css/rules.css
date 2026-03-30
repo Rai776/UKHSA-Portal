@@ -8,6 +8,12 @@
     width: 100%;
 }
 
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 .page-header {
     margin-bottom: 1.5rem;
 }
@@ -126,7 +132,7 @@
     overflow-x: auto;
 }
 
-.data-table {
+.data-table{
     width: 100%;
     border-collapse: collapse;
     font-family: var(--govuk-font);
@@ -139,7 +145,7 @@
 
 .data-table thead th {
     padding: 12px 16px;
-    text-align: left;
+    text-align: center;
     font-weight: 700;
     color: var(--govuk-black);
     font-size: 0.8rem;
@@ -247,8 +253,41 @@
     transition: background-color 0.1s ease;
 }
 
+.btn-delete {
+    background-color: var(--govuk-red);
+    color: var(--govuk-white);
+    font-family: var(--govuk-font);
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    box-shadow: 0 2px 0 #8b0000;
+    position: relative;
+    transition: background-color 0.1s ease;
+}
+
+.btn-create {
+    background-color: var(--govuk-blue);
+    color: var(--govuk-white);
+    font-family: var(--govuk-font);
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    position: relative;
+    transition: background-color 0.1s ease;
+}
+
 .btn-update:hover {
     background-color: #005a30;
+}
+
+.btn-delete:hover {
+    background-color: #8b0000;
 }
 
 .btn-update:active {
@@ -256,7 +295,17 @@
     box-shadow: none;
 }
 
+.btn-delete:active {
+    top: 2px;
+    box-shadow: none;
+}
+
 .btn-update:focus {
+    outline: 3px solid var(--govuk-focus);
+    outline-offset: 3px;
+}
+
+.btn-delete:focus {
     outline: 3px solid var(--govuk-focus);
     outline-offset: 3px;
 }
