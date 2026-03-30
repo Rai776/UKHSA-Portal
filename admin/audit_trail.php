@@ -123,7 +123,7 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                 to 
                 <strong><?php echo min($offset + $per_page, $total_records); ?></strong> 
                 of 
-                <strong><?php echo $total_records; ?></strong> datasets
+                <strong><?php echo $total_records; ?></strong> logs
             </span>
         </div>
 
@@ -143,9 +143,9 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                     <tr>
                         <td colspan="5" class="empty-row">
                             <?php if (!empty($search)): ?>
-                                No datasets found matching "<?php echo htmlspecialchars($search); ?>".
+                                No logs found matching "<?php echo htmlspecialchars($search); ?>".
                             <?php else: ?>
-                                No datasets available.
+                                No logs available.
                             <?php endif; ?>
                         </td>
                     </tr>
