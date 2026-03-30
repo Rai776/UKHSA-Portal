@@ -11,16 +11,6 @@ if ($_SESSION['role'] !== 'Administrator') {
     exit();
 }
 
-$expire_query = '
-    UPDATE "Access_Request"
-    SET request_status = \'Rejected\',
-        approval_reason = \'Access expired automatically on \' || expiry_date::TEXT
-    WHERE request_status = \'Approved\'
-    AND expiry_date IS NOT NULL
-    AND expiry_date < CURRENT_DATE
-';
-$expire_result = pg_query($conn, $expire_query);
-
 $search       = trim($_GET['search'] ?? '');
 $current_page = max(1, intval($_GET['page'] ?? 1));
 $per_page     = 5;
@@ -72,25 +62,6 @@ $datasets = [];
 if ($ds_result) {
     while ($row = pg_fetch_assoc($ds_result)) {
         $datasets[] = $row;
-    }
-}
-
-$req_query = '
-    SELECT dataset_id, request_status
-    FROM "Access_Request"
-    WHERE user_id = $1
-    AND (request_status = $2 OR request_status = $3)
-';
-$req_result = pg_query_params($conn, $req_query, [
-    $_SESSION['user_id'],
-    'Pending',
-    'Approved'
-]);
-
-$user_requests = [];
-if ($req_result) {
-    while ($row = pg_fetch_assoc($req_result)) {
-        $user_requests[$row['dataset_id']] = $row['request_status'];
     }
 }
 
@@ -167,12 +138,12 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Dataset Name</th>
-                        <th>Description</th>
-                        <th>Category</th>
-                        <th>Sensitivity</th>
-                        <th>Active?</th>
-                        <th colspan="2">Action</th>
+                        <th class="data-table-left-heading">Dataset Name</th>
+                        <th class="data-table-left-heading">Description</th>
+                        <th class="data-table-left-heading">Category</th>
+                        <th class="data-table-left-heading">Sensitivity</th>
+                        <th class="data-table-left-heading">Active?</th>
+                        <th colspan="2" class="data-table-center-heading">Action</th>
                     </tr>
                 </thead>
                 <tbody>

@@ -26,7 +26,7 @@ if (!empty($_POST['dataset_id'])) {
             $log_result = pg_query_params($conn, $log_query, [
                 $_SESSION['user_id'],
                 'DELETE',
-                'DATASET',
+                'Dataset',
                 $dataset_id
             ]);
 

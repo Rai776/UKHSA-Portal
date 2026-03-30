@@ -17,5 +17,3 @@ $conn = pg_connect($conn_string);
 if (!$conn) {
     die("Connection failed: " . pg_last_error());
 }
-
-echo "Connected successfully to Supabase Transaction Pooler!";

@@ -29,7 +29,7 @@ if (session_status() === PHP_SESSION_NONE) {
             </a>
         </div>
         <div>
-            <a href="audit_log.php" class="option">
+            <a href="audit_trail.php" class="option">
                 <div class="material-icons icon-item">history</div> Audit Log
             </a>
         </div>
