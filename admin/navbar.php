@@ -3,6 +3,8 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 ?>
+    <link rel="stylesheet" href="../assets/css/navbar.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <header>
     <div class="navbar">
         <div>
@@ -13,22 +15,22 @@ if (session_status() === PHP_SESSION_NONE) {
         </div>
         <div>
             <a href="dashboard.php" class="option">
-                <div class="material-icons">dashboard</div> Dashboard
+                <div class="material-icons icon-item">dashboard</div> Dashboard
             </a>
         </div>
         <div>
             <a href="manage_requests.php" class="option">
-                <div class="material-icons">pending_actions</div> Manage Requests
+                <div class="material-icons icon-item">pending_actions</div> Manage Requests
             </a>
         </div>
         <div>
-            <a href="dataset_rules.php" class="option">
-                <div class="material-icons">rule</div> Dataset & Rules
+            <a href="rules_management.php" class="option">
+                <div class="material-icons icon-item">rule</div> Dataset & Rules
             </a>
         </div>
         <div>
-            <a href="audit_log.php" class="option">
-                <div class="material-icons">history</div> Audit Log
+            <a href="audit_trail.php" class="option">
+                <div class="material-icons icon-item">history</div> Audit Log
             </a>
         </div>
         <div class="logout-item">
