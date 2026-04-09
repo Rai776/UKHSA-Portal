@@ -11,6 +11,52 @@ if ($_SESSION['role'] !== 'Administrator') {
     exit();
 }
 
+if (isset($_GET['export']) && $_GET['export'] === 'csv'){
+    $search_export = trim($_GET['search'] ?? '');
+
+    if (!empty($search_export)) {
+        $export_result = pg_query_params($conn, '
+            SELECT user_id, action, target_table, target_id, timestamp
+            FROM "Audit_Log"
+            WHERE CAST (user_id AS text) LIKE LOWER($1)
+            OR LOWER (action) LIKE LOWE ($1)
+            OR CAST(target_id AS text) LIKE LOWER ($1)
+            ORDER BY timestamp ASC
+        ', ['%' . $search_export . '%']);
+    } else {
+        $export_result = pg_query($conn, '
+            SELECT user_id, action, target_table, target_id, timestamp
+            FROM "Audit_LOg"
+            ORDER BY timestamp ASC
+        ');
+    }
+        
+    $filename = 'audit_log_' . date('Y-m-d-i-s') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename=" ' . $filename .
+'"');
+    header ('Pragma: no-cache');
+    header('Expires: 0');
+
+    $output = fopen('php://output', 'w');
+    fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+    fputcsv($output, ['User ID', 'Action', 'Target Table', 'Target ID', 'Timestamp']);
+
+    while ($row = pg_fetch_assoc($expor_result)) {
+        fputcsv ($output, [
+            $row['user_id'] ?? 'N/A',
+            $row['action'] ?? 'N/A',
+            $row['target_table'] ?? 'N/A',
+            $row['target_id'] ?? 'N/A',
+            $row['timestamp'] ?? 'N/A',
+        ]);
+    }
+
+    fclose($output);
+    exit();
+}
+
+
 $search       = trim($_GET['search'] ?? '');
 $current_page = max(1, intval($_GET['page'] ?? 1));
 $per_page     = 5;
@@ -65,6 +111,7 @@ if ($ds_result) {
     }
 }
 $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
+$export_url = 'audit_trail.php?export=csv' . $search_query;
 
 ?>
 <!DOCTYPE html>
@@ -84,6 +131,9 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
             <div class="page-header">
                 <h1>Audit Log</h1>
                 <p>View all user actions</p>
+                <a href= "<?php echo htmlspecialchars($export_url); ?>" class = "btn-export">
+                    Export as CSV
+                </a>
             </div>
 
         <div class="search-section">

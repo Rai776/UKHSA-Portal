@@ -284,3 +284,17 @@
     font-size: 0.85rem;
     color: var(--govuk-grey-dark);
 }
+
+.btn-export {
+    display: inline-block;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #ffffff;
+    background-color: #00703c;
+    text-decoration: none;
+}
+
+.btn-export:hover {
+    background-color: #005a30;
+}
