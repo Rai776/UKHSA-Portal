@@ -11,44 +11,48 @@ if ($_SESSION['role'] !== 'Administrator') {
     exit();
 }
 
-if (isset($_GET['export']) && $_GET['export'] === 'csv'){
+if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     $search_export = trim($_GET['search'] ?? '');
 
     if (!empty($search_export)) {
         $export_result = pg_query_params($conn, '
             SELECT user_id, action, target_table, target_id, timestamp
             FROM "Audit_Log"
-            WHERE CAST (user_id AS text) LIKE LOWER($1)
-            OR LOWER (action) LIKE LOWE ($1)
-            OR CAST(target_id AS text) LIKE LOWER ($1)
+            WHERE CAST(user_id AS text) LIKE LOWER($1)
+            OR LOWER(action) LIKE LOWER($1)
+            OR LOWER(target_table) LIKE LOWER($1)
+            OR CAST(target_id AS text) LIKE LOWER($1)
             ORDER BY timestamp ASC
         ', ['%' . $search_export . '%']);
     } else {
         $export_result = pg_query($conn, '
             SELECT user_id, action, target_table, target_id, timestamp
-            FROM "Audit_LOg"
+            FROM "Audit_Log"
             ORDER BY timestamp ASC
         ');
     }
-        
-    $filename = 'audit_log_' . date('Y-m-d-i-s') . '.csv';
+
+    if (!$export_result) {
+        die('Export failed: ' . pg_last_error($conn));
+    }
+
+    $filename = 'audit_log_' . date('Y-m-d_H-i-s') . '.csv';
     header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename=" ' . $filename .
-'"');
-    header ('Pragma: no-cache');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
     header('Expires: 0');
 
     $output = fopen('php://output', 'w');
     fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
     fputcsv($output, ['User ID', 'Action', 'Target Table', 'Target ID', 'Timestamp']);
 
-    while ($row = pg_fetch_assoc($expor_result)) {
-        fputcsv ($output, [
-            $row['user_id'] ?? 'N/A',
-            $row['action'] ?? 'N/A',
+    while ($row = pg_fetch_assoc($export_result)) {
+        fputcsv($output, [
+            $row['user_id']      ?? 'N/A',
+            $row['action']       ?? 'N/A',
             $row['target_table'] ?? 'N/A',
-            $row['target_id'] ?? 'N/A',
-            $row['timestamp'] ?? 'N/A',
+            $row['target_id']    ?? 'N/A',
+            $row['timestamp']    ?? 'N/A',
         ]);
     }
 
