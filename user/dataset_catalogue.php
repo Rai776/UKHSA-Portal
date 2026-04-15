@@ -35,6 +35,7 @@ if (!empty($search)) {
         OR LOWER(description) LIKE LOWER($1)
         OR LOWER(category) LIKE LOWER($1)
         OR LOWER(sensitivity) LIKE LOWER($1)
+        AND Active = True
     ';
     $count_result = pg_query_params($conn, $count_query, ['%' . $search . '%']);
 } else {
@@ -56,6 +57,7 @@ if (!empty($search)) {
         OR LOWER(description) LIKE LOWER($1)
         OR LOWER(category) LIKE LOWER($1)
         OR LOWER(sensitivity) LIKE LOWER($1)
+        AND Active = True
         ORDER BY name ASC
         LIMIT $2 OFFSET $3
     ';
@@ -64,6 +66,7 @@ if (!empty($search)) {
     $ds_query = '
         SELECT dataset_id, name, description, category, sensitivity
         FROM "Dataset"
+        WHERE Active = True
         ORDER BY name ASC
         LIMIT $1 OFFSET $2
     ';

@@ -54,12 +54,14 @@ $update_query = '
     SET request_status = $1,
         approved_date = CURRENT_TIMESTAMP,
         expiry_date = (CURRENT_DATE + INTERVAL \'6 months\')::DATE,
-        approval_reason = $2
-    WHERE request_id = $3
+        approval_reason = $2,
+        approver_id = $3
+    WHERE request_id = $4
 ';
 $update_result = pg_query_params($conn, $update_query, [
     'Approved',
     'Approved by ' . $_SESSION['full_name'],
+    $_SESSION['user_id'],
     $request_id
 ]);
 
