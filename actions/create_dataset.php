@@ -14,7 +14,7 @@ if (isset($_POST['submit_request'])) {
     $sensitivity = $_POST['sensitivity'] ?? '';
     $active      = $_POST['active'] ?? '';
 
-    if ($name !== '' && $description !== '' && $category !== '' && ($sensitivity === 'Sensitive' || $sensitivity === 'Non-sensitive') && ($active === 'True' || $active === 'False')) {
+    if ($name !== '' && $description !== '' && $category !== '' && ($sensitivity === 'Sensitive' || $sensitivity === 'Non-sensitive') && ($active == true || $active == false)) {
         $insert_query = '
             INSERT INTO "Dataset" (name, description, category, sensitivity, active)
             VALUES ($1, $2, $3, $4, $5)

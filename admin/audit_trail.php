@@ -132,13 +132,15 @@ $export_url = 'audit_trail.php?export=csv' . $search_query;
     include("navbar.php");
     ?>
     <div class="page-container">
+        <div class="header-content">
             <div class="page-header">
                 <h1>Audit Log</h1>
                 <p>View all user actions</p>
-                <a href= "<?php echo htmlspecialchars($export_url); ?>" class = "btn-export">
-                    Export as CSV
-                </a>
             </div>
+            <a href= "<?php echo htmlspecialchars($export_url); ?>" class = "btn-export">
+                Export as CSV
+            </a>
+        </div>
 
         <div class="search-section">
             <form method="GET" action="audit_trail.php" class="search-form">

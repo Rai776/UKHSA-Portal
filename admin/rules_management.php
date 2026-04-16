@@ -179,7 +179,7 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <?php if ($dataset['active'] === 'True'): ?>
+                                <?php if ($dataset['active'] == true): ?>
                                     <span class="activity-badge active">True</span>
                                 <?php else: ?>
                                     <span class="activity-badge inactive">False</span>
@@ -327,8 +327,8 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                             Active? <span class="required">*</span>
                         </label>
                         <select id="modal_active" name="active" required>
-                            <option value="True">True</option>
-                            <option value="False">False</option>
+                            <option value= true>True</option>
+                            <option value= false>False</option>
                         </select>
                     </div>
 
@@ -413,8 +413,8 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                         Active? <span class="required">*</span>
                     </label>
                     <select id="create_active" name="active" required>
-                        <option value="True">True</option>
-                        <option value="False">False</option>
+                        <option value= true>True</option>
+                        <option value= false>False</option>
                     </select>
                 </div>
             </div>
