@@ -82,6 +82,37 @@ $log_query = '
     $request_id
 ]);
 
+require_once '../config/email_helper.php';
+
+$user_query  = pg_query_params($conn, '
+    SELECT u.email, u.full_name, d.name AS dataset_name
+    FROM "User" u
+    JOIN "Access_Request" ar ON ar.user_id = u.user_id
+    JOIN "Dataset" d ON ar.dataset_id = d.dataset_id
+    WHERE ar.request_id = $1
+', [$request_id]);
+
+$user_data = pg_fetch_assoc($user_query);
+
+if ($user_data && !empty($user_data['email'])) {
+    $expiry_date = date('Y-m-d', strtotime('+6 months'));
+
+    $email_sent = sendApprovalEmail(
+        $user_data['email'],
+        $user_data['full_name'],
+        $user_data['dataset_name'],
+        $expiry_date
+    );
+
+    if ($email_sent) {
+        $_SESSION['admin_success'] = 'Request approved and notification email sent to ' . $user_data['email'];
+    } else {
+        $_SESSION['admin_success'] = 'Request approved but email notification failed.';
+    }
+} else {
+    $_SESSION['admin_success'] = 'Request approved successfully.';
+}
+
 $_SESSION['admin_success'] = 'Sensitive request from "' . $request['full_name'] . '" for "' . $request['dataset_name'] . '" has been approved. Access expires in 6 months.';
 header('Location: ../admin/manage_requests.php');
 exit();

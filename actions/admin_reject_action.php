@@ -93,6 +93,35 @@ $log_query = '
     $request_id
 ]);
 
+require_once '../config/email_helper.php';
+
+$user_query = pg_query_params($conn, '
+    SELECT u.email, u.full_name, d.name AS dataset_name
+    FROM "User" u
+    JOIN "Access_Request" ar ON ar.user_id = u.user_id
+    JOIN "Dataset" d ON ar.dataset_id = d.dataset_id
+    WHERE ar.request_id = $1
+', [$request_id]);
+
+$user_data = pg_fetch_assoc($user_query);
+
+if ($user_data && !empty($user_data['email'])) {
+    $email_sent = sendRejectionEmail(
+        $user_data['email'],
+        $user_data['full_name'],
+        $user_data['dataset_name'],
+        $reason                     // your existing rejection reason variable
+    );
+
+    if ($email_sent) {
+        $_SESSION['admin_success'] = 'Request rejected and notification email sent to ' . $user_data['email'];
+    } else {
+        $_SESSION['admin_success'] = 'Request rejected but email notification failed.';
+    }
+} else {
+    $_SESSION['admin_success'] = 'Request rejected successfully.';
+}
+
 $_SESSION['admin_success'] = 'Sensitive request from "' . $request['full_name'] . '" for "' . $request['dataset_name'] . '" has been rejected.';
 header('Location: ../admin/manage_requests.php');
 exit();
