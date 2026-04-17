@@ -1,9 +1,6 @@
 <?php
 require_once __DIR__ . '/email_config.php';
 
-// ============================================
-// MANUAL PHPMAILER INCLUDES
-// ============================================
 require_once __DIR__ . '/../vendor/phpmailer/src/Exception.php';
 require_once __DIR__ . '/../vendor/phpmailer/src/PHPMailer.php';
 require_once __DIR__ . '/../vendor/phpmailer/src/SMTP.php';
@@ -12,9 +9,6 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
-// ============================================
-// CORE SEND FUNCTION
-// ============================================
 function sendEmail($to_email, $to_name, $subject, $html_body) {
     if (!MAIL_ENABLED) {
         error_log('[Email] Email is disabled in config.');
@@ -24,7 +18,6 @@ function sendEmail($to_email, $to_name, $subject, $html_body) {
     $mail = new PHPMailer(true);
 
     try {
-        // Server settings
         $mail->isSMTP();
         $mail->Host       = MAIL_HOST;
         $mail->SMTPAuth   = true;
@@ -56,9 +49,7 @@ function sendEmail($to_email, $to_name, $subject, $html_body) {
     }
 }
 
-// ============================================
-// BASE EMAIL LAYOUT
-// ============================================
+
 function emailLayout($content, $border_color = '#1D70B8') {
     return '
     <!DOCTYPE html>
@@ -107,9 +98,6 @@ function emailLayout($content, $border_color = '#1D70B8') {
     </html>';
 }
 
-// ============================================
-// EMAIL 1: APPROVAL NOTIFICATION
-// ============================================
 function sendApprovalEmail($to_email, $to_name, $dataset_name, $expiry_date) {
     $subject = '[UKHSA Portal] Access Approved — ' . $dataset_name;
 
@@ -151,9 +139,6 @@ function sendApprovalEmail($to_email, $to_name, $dataset_name, $expiry_date) {
     return sendEmail($to_email, $to_name, $subject, emailLayout($content, '#00703c'));
 }
 
-// ============================================
-// EMAIL 2: REJECTION NOTIFICATION
-// ============================================
 function sendRejectionEmail($to_email, $to_name, $dataset_name, $reason) {
     $subject = '[UKHSA Portal] Access Request Rejected — ' . $dataset_name;
 
@@ -194,9 +179,6 @@ function sendRejectionEmail($to_email, $to_name, $dataset_name, $reason) {
     return sendEmail($to_email, $to_name, $subject, emailLayout($content, '#d4351c'));
 }
 
-// ============================================
-// EMAIL 3: ACCESS EXPIRY WARNING
-// ============================================
 function sendAccessExpiryEmail($to_email, $to_name, $dataset_name, $expiry_date, $days_left) {
     $subject       = '[UKHSA Portal] Access Expiring in ' . $days_left . ' Day' . ($days_left > 1 ? 's' : '') . ' — ' . $dataset_name;
     $urgency_color = $days_left <= 1 ? '#d4351c' : '#f47738';
@@ -239,9 +221,7 @@ function sendAccessExpiryEmail($to_email, $to_name, $dataset_name, $expiry_date,
     return sendEmail($to_email, $to_name, $subject, emailLayout($content, $urgency_color));
 }
 
-// ============================================
-// EMAIL 4: TRAINING EXPIRY WARNING
-// ============================================
+
 function sendTrainingExpiryEmail($to_email, $to_name, $expiry_date, $days_left) {
     $subject       = '[UKHSA Portal] Training Certification Expiring in ' . $days_left . ' Day' . ($days_left > 1 ? 's' : '');
     $urgency_color = $days_left <= 3 ? '#d4351c' : '#f47738';
