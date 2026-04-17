@@ -179,15 +179,15 @@ body {
     font-weight: 700;
     font-family: var(--govuk-font);
     color: var(--govuk-white);
-    background-color: var(--govuk-blue);
-    border: 2px solid var(--govuk-blue);
+    background-color: var(--govuk-green);
+    border: 0 2px 0 var(--govuk-green-shadow);
     cursor: pointer;
     transition: background-color 0.1s ease;
 }
 
 .search-btn:hover {
-    background-color: var(--govuk-blue-dark);
-    border-color: var(--govuk-blue-dark);
+    background-color: var(--govuk-green-hover);
+    border-color: var(--govuk-green-hover);
 }
 
 .search-btn .material-icons {

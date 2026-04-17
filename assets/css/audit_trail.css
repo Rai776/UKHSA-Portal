@@ -78,15 +78,15 @@
     font-weight: 700;
     font-family: var(--govuk-font);
     color: var(--govuk-white);
-    background-color: var(--govuk-blue);
-    border: 2px solid var(--govuk-blue);
+    background-color: var(--govuk-green);
+    border: 0 2px 0 var(--govuk-green-shadow);
     border-radius: 0;
     cursor: pointer;
 }
 
 .search-btn:hover {
-    background-color: var(--govuk-blue-hover);
-    border-color: var(--govuk-blue-hover);
+    background-color: var(--govuk-green-hover);
+    border-color: var(--govuk-green-hover);
 }
 
 .search-btn:focus {
@@ -287,9 +287,10 @@
 
 .btn-export {
     display: inline-block;
-    padding: 8px 16px;
+    padding: 12px 20px;
     position: relative;
-    font-size: 0.85rem;
+    font-family: var(--govuk-font);
+    font-size: 1rem;
     font-weight: 700;
     color: #ffffff;
     background-color: #00703c;
