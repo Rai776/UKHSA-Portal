@@ -30,6 +30,8 @@
     --govuk-grey-dark: #505a5f;
     --govuk-red: #d4351c;
     --govuk-green: #00703c;
+    --govuk-green-shadow: #083d29;
+    --govuk-green-hover: #0b5c3e;
     --govuk-focus: #ffdd00;
     --govuk-input-border: #0b0c0c;
     --govuk-font: "GDS Transport", Arial, Helvetica, sans-serif;
@@ -197,7 +199,7 @@ input::placeholder {
     width: 100%;
     padding: 10px;
     margin-top: 0.5rem;
-    background-color: var(--govuk-blue);
+    background-color: var(--govuk-green);
     color: var(--govuk-white);
     font-size: 1rem;
     font-weight: 700;
@@ -206,11 +208,11 @@ input::placeholder {
     border-radius: 0;
     cursor: pointer;
     position: relative;
-    box-shadow: 0 2px 0 var(--govuk-blue-dark);
+    box-shadow: 0 2px 0 var(--govuk-green-shadow);
 }
 
 .btn-login:hover {
-    background-color: var(--govuk-blue-hover);
+    background-color: var(--govuk-green-hover);
 }
 
 .btn-login:active {

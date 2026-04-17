@@ -84,15 +84,15 @@
     font-weight: 700;
     font-family: var(--govuk-font);
     color: var(--govuk-white);
-    background-color: var(--govuk-blue);
-    border: 2px solid var(--govuk-blue);
+    background-color: var(--govuk-green);
+    border: 0 2px 0 var(--govuk-green-shadow);
     border-radius: 0;
     cursor: pointer;
 }
 
 .search-btn:hover {
-    background-color: var(--govuk-blue-hover);
-    border-color: var(--govuk-blue-hover);
+    background-color: var(--govuk-green-hover);
+    border-color: var(--govuk-green-hover);
 }
 
 .search-btn:focus {
@@ -276,7 +276,7 @@
 }
 
 .btn-create {
-    background-color: var(--govuk-blue);
+    background-color: var(--govuk-green);
     color: var(--govuk-white);
     font-family: var(--govuk-font);
     font-size: 1rem;
@@ -287,6 +287,7 @@
     cursor: pointer;
     position: relative;
     transition: background-color 0.1s ease;
+    box-shadow: 0 2px 0 var(--govuk-green-shadow);;
 }
 
 .btn-update:hover {
@@ -298,8 +299,8 @@
 }
 
 .btn-create:hover {
-    background-color: var(--govuk-blue-hover);
-    border-color: var(--govuk-blue-hover);
+    background-color: var(--govuk-green-hover);
+    border-color: var(--govuk-green-hover);
 }
 
 .btn-update:active {
