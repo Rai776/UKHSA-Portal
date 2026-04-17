@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once '../config/db_connect.php';
+require_once '../config/supabase.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: ../login.php');
@@ -25,87 +25,97 @@ if ($request_id <= 0) {
     exit();
 }
 
-$check_query = '
-    SELECT ar.request_id, ar.user_id, ar.dataset_id, ar.request_status,
-           u.full_name, d.name as dataset_name, d.sensitivity
-    FROM "Access_Request" ar
-    JOIN "User" u ON ar.user_id = u.user_id
-    JOIN "Dataset" d ON ar.dataset_id = d.dataset_id
-    WHERE ar.request_id = $1
-      AND d.sensitivity = $2
-';
-$check_result = pg_query_params($conn, $check_query, [$request_id, 'Sensitive']);
-$request = pg_fetch_assoc($check_result);
+$check_result = supabaseRequest(
+    'Access_Request?select=request_id,user_id,dataset_id,request_status&request_id=eq.' . $request_id
+);
 
-if (!$request) {
+if (empty($check_result) || isset($check_result['error'])) {
+    $_SESSION['admin_error'] = 'Request not found.';
+    header('Location: ../admin/manage_requests.php');
+    exit();
+}
+
+$access_request = $check_result[0];
+
+$user_result = supabaseRequest(
+    'User?select=user_id,full_name,email&user_id=eq.' . $access_request['user_id']
+);
+
+if (empty($user_result) || isset($user_result['error'])) {
+    $_SESSION['admin_error'] = 'User not found.';
+    header('Location: ../admin/manage_requests.php');
+    exit();
+}
+
+$user = $user_result[0];
+
+$dataset_result = supabaseRequest(
+    'Dataset?select=dataset_id,name,sensitivity&dataset_id=eq.' . $access_request['dataset_id']
+);
+
+if (empty($dataset_result) || isset($dataset_result['error'])) {
+    $_SESSION['admin_error'] = 'Dataset not found.';
+    header('Location: ../admin/manage_requests.php');
+    exit();
+}
+
+$dataset = $dataset_result[0];
+
+if ($dataset['sensitivity'] !== 'Sensitive') {
     $_SESSION['admin_error'] = 'Request not found or not a sensitive dataset request.';
     header('Location: ../admin/manage_requests.php');
     exit();
 }
 
-if ($request['request_status'] !== 'Pending') {
-    $_SESSION['admin_error'] = 'This request has already been ' . strtolower($request['request_status']) . '.';
+if ($access_request['request_status'] !== 'Pending') {
+    $_SESSION['admin_error'] = 'This request has already been ' . strtolower($access_request['request_status']) . '.';
     header('Location: ../admin/manage_requests.php');
     exit();
 }
 
-$update_query = '
-    UPDATE "Access_Request"
-    SET request_status = $1,
-        approved_date = CURRENT_TIMESTAMP,
-        expiry_date = (CURRENT_DATE + INTERVAL \'6 months\')::DATE,
-        approval_reason = $2,
-        approver_id = $3
-    WHERE request_id = $4
-';
-$update_result = pg_query_params($conn, $update_query, [
-    'Approved',
-    'Approved by ' . $_SESSION['full_name'],
-    $_SESSION['user_id'],
-    $request_id
-]);
+$expiry_date   = date('Y-m-d', strtotime('+6 months'));
 
-if (!$update_result) {
+$update_result = supabaseRequest(
+    'Access_Request?request_id=eq.' . $request_id,
+    'PATCH',
+    [
+        'request_status'  => 'Approved',
+        'approved_date'   => date('c'),
+        'expiry_date'     => $expiry_date,
+        'approval_reason' => 'Approved by ' . $_SESSION['full_name'],
+        'approver_id'     => $_SESSION['user_id']
+    ]
+);
+
+if (isset($update_result['error'])) {
     $_SESSION['admin_error'] = 'Failed to approve request. Please try again.';
     header('Location: ../admin/manage_requests.php');
     exit();
 }
 
-$log_query = '
-    INSERT INTO "Audit_Log" (user_id, action, target_table, target_id)
-    VALUES ($1, $2, $3, $4)
-';
-@pg_query_params($conn, $log_query, [
-    $_SESSION['user_id'],
-    'APPROVED: Admin approved sensitive access for "' . $request['full_name'] . '" to dataset "' . $request['dataset_name'] . '"',
-    'Access_Request',
-    $request_id
-]);
+supabaseRequest(
+    'Audit_Log',
+    'POST',
+    [
+        'user_id'      => $_SESSION['user_id'],
+        'action'       => 'APPROVED: Admin approved sensitive access for "' . $user['full_name'] . '" to dataset "' . $dataset['name'] . '"',
+        'target_table' => 'Access_Request',
+        'target_id'    => $request_id
+    ]
+);
 
 require_once '../config/email_helper.php';
 
-$user_query  = pg_query_params($conn, '
-    SELECT u.email, u.full_name, d.name AS dataset_name
-    FROM "User" u
-    JOIN "Access_Request" ar ON ar.user_id = u.user_id
-    JOIN "Dataset" d ON ar.dataset_id = d.dataset_id
-    WHERE ar.request_id = $1
-', [$request_id]);
-
-$user_data = pg_fetch_assoc($user_query);
-
-if ($user_data && !empty($user_data['email'])) {
-    $expiry_date = date('Y-m-d', strtotime('+6 months'));
-
+if (!empty($user['email'])) {
     $email_sent = sendApprovalEmail(
-        $user_data['email'],
-        $user_data['full_name'],
-        $user_data['dataset_name'],
+        $user['email'],
+        $user['full_name'],
+        $dataset['name'],
         $expiry_date
     );
 
     if ($email_sent) {
-        $_SESSION['admin_success'] = 'Request approved and notification email sent to ' . $user_data['email'];
+        $_SESSION['admin_success'] = 'Request approved and notification email sent to ' . $user['email'];
     } else {
         $_SESSION['admin_success'] = 'Request approved but email notification failed.';
     }
@@ -113,7 +123,7 @@ if ($user_data && !empty($user_data['email'])) {
     $_SESSION['admin_success'] = 'Request approved successfully.';
 }
 
-$_SESSION['admin_success'] = 'Sensitive request from "' . $request['full_name'] . '" for "' . $request['dataset_name'] . '" has been approved. Access expires in 6 months.';
+$_SESSION['admin_success'] = 'Sensitive request from "' . $user['full_name'] . '" for "' . $dataset['name'] . '" has been approved. Access expires in 6 months.';
 header('Location: ../admin/manage_requests.php');
 exit();
 ?>

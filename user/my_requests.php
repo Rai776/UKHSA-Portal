@@ -1,24 +1,36 @@
 <?php
 session_start();
-require_once '../config/db_connect.php';
-include("navbar.php");
-
-$expire_query = '
-    UPDATE "Access_Request"
-    SET request_status = \'Rejected\',
-        approval_reason = \'Access expired automatically on \' || expiry_date::TEXT
-    WHERE request_status = \'Approved\'
-    AND expiry_date IS NOT NULL
-    AND expiry_date < CURRENT_DATE
-';
-$expire_result = pg_query($conn, $expire_query);
+require_once '../config/supabase.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: ../login.php');
     exit();
 }
 
-$request_error   = $_SESSION['request_error'] ?? '';
+include("navbar.php");
+
+$today            = date('Y-m-d');
+$expired_requests = supabaseRequest(
+    'Access_Request?select=request_id,expiry_date' .
+        '&request_status=eq.Approved' .
+        '&expiry_date=not.is.null' .
+        '&expiry_date=lt.' . $today
+);
+
+if (!empty($expired_requests) && !isset($expired_requests['error'])) {
+    foreach ($expired_requests as $expired) {
+        supabaseRequest(
+            'Access_Request?request_id=eq.' . $expired['request_id'],
+            'PATCH',
+            [
+                'request_status'  => 'Rejected',
+                'approval_reason' => 'Access expired automatically on ' . $expired['expiry_date']
+            ]
+        );
+    }
+}
+
+$request_error   = $_SESSION['request_error']   ?? '';
 $request_success = $_SESSION['request_success'] ?? '';
 unset($_SESSION['request_error']);
 unset($_SESSION['request_success']);
@@ -27,102 +39,69 @@ $search       = trim($_GET['search'] ?? '');
 $filter       = trim($_GET['filter'] ?? 'all');
 $current_page = max(1, intval($_GET['page'] ?? 1));
 $per_page     = 5;
-$offset       = ($current_page - 1) * $per_page;
 
-$conditions = 'WHERE ar.user_id = $1';
-$params     = [$_SESSION['user_id']];
-$param_num  = 2;
+$all_requests = supabaseRequest(
+    'Access_Request?select=request_id,dataset_id,access_type,purpose,request_status,approval_reason,request_date,approved_date,expiry_date' .
+        '&user_id=eq.' . $_SESSION['user_id'] .
+        '&order=request_date.desc'
+);
 
-if ($filter === 'pending') {
-    $conditions .= " AND ar.request_status = \$" . $param_num;
-    $params[] = 'Pending';
-    $param_num++;
-} elseif ($filter === 'approved') {
-    $conditions .= " AND ar.request_status = \$" . $param_num;
-    $params[] = 'Approved';
-    $param_num++;
-} elseif ($filter === 'rejected') {
-    $conditions .= " AND ar.request_status = \$" . $param_num;
-    $params[] = 'Rejected';
-    $param_num++;
+if (isset($all_requests['error']) || !is_array($all_requests)) {
+    $all_requests = [];
 }
 
-if (!empty($search)) {
-    $conditions .= " AND (LOWER(d.name) LIKE LOWER(\$" . $param_num . ")";
-    $conditions .= " OR LOWER(d.sensitivity) LIKE LOWER(\$" . $param_num . "))";
-    $params[] = '%' . $search . '%';
-    $param_num++;
-}
-
-$count_query = '
-    SELECT COUNT(*) as total
-    FROM "Access_Request" ar
-    JOIN "Dataset" d ON ar.dataset_id = d.dataset_id
-    ' . $conditions;
-
-$count_result  = pg_query_params($conn, $count_query, $params);
-$total_records = 0;
-if ($count_result) {
-    $row = pg_fetch_assoc($count_result);
-    $total_records = intval($row['total']);
-}
-$total_pages = max(1, ceil($total_records / $per_page));
-
-$fetch_query = '
-    SELECT 
-        ar.request_id,
-        ar.dataset_id,
-        d.name as dataset_name,
-        d.sensitivity,
-        ar.access_type,
-        ar.purpose,
-        ar.request_status,
-        ar.approval_reason,
-        ar.request_date,
-        ar.approved_date,
-        ar.expiry_date
-    FROM "Access_Request" ar
-    JOIN "Dataset" d ON ar.dataset_id = d.dataset_id
-    ' . $conditions . '
-    ORDER BY ar.request_date DESC
-    LIMIT $' . $param_num . ' OFFSET $' . ($param_num + 1);
-
-$params[] = $per_page;
-$params[] = $offset;
-
-$fetch_result = pg_query_params($conn, $fetch_query, $params);
-$requests = [];
-if ($fetch_result) {
-    while ($row = pg_fetch_assoc($fetch_result)) {
-        $requests[] = $row;
+$all_datasets = supabaseRequest('Dataset?select=dataset_id,name,sensitivity');
+$dataset_map  = [];
+if (!empty($all_datasets) && !isset($all_datasets['error'])) {
+    foreach ($all_datasets as $ds) {
+        $dataset_map[$ds['dataset_id']] = $ds;
     }
 }
 
-$count_all_q = pg_query_params($conn, '
-    SELECT COUNT(*) as total FROM "Access_Request" WHERE user_id = $1
-', [$_SESSION['user_id']]);
-$count_all = intval(pg_fetch_assoc($count_all_q)['total']);
+$all_rows = [];
+foreach ($all_requests as $req) {
+    $ds = $dataset_map[$req['dataset_id']] ?? null;
+    if (!$ds) continue;
 
-$count_pending_q = pg_query_params($conn, '
-    SELECT COUNT(*) as total FROM "Access_Request" WHERE user_id = $1 AND request_status = $2
-', [$_SESSION['user_id'], 'Pending']);
-$count_pending = intval(pg_fetch_assoc($count_pending_q)['total']);
+    $all_rows[] = array_merge($req, [
+        'dataset_name' => $ds['name'],
+        'sensitivity'  => $ds['sensitivity']
+    ]);
+}
 
-$count_approved_q = pg_query_params($conn, '
-    SELECT COUNT(*) as total FROM "Access_Request" WHERE user_id = $1 AND request_status = $2
-', [$_SESSION['user_id'], 'Approved']);
-$count_approved = intval(pg_fetch_assoc($count_approved_q)['total']);
+$count_all      = count($all_rows);
+$count_pending  = count(array_filter($all_rows, fn($r) => $r['request_status'] === 'Pending'));
+$count_approved = count(array_filter($all_rows, fn($r) => $r['request_status'] === 'Approved'));
+$count_rejected = count(array_filter($all_rows, fn($r) => $r['request_status'] === 'Rejected'));
 
-$count_rejected_q = pg_query_params($conn, '
-    SELECT COUNT(*) as total FROM "Access_Request" WHERE user_id = $1 AND request_status = $2
-', [$_SESSION['user_id'], 'Rejected']);
-$count_rejected = intval(pg_fetch_assoc($count_rejected_q)['total']);
+if ($filter !== 'all') {
+    $filter_status = ucfirst($filter);
+    $all_rows = array_filter($all_rows, fn($r) => $r['request_status'] === $filter_status);
+    $all_rows = array_values($all_rows);
+}
+
+if (!empty($search)) {
+    $search_lower = strtolower($search);
+    $all_rows = array_filter($all_rows, function ($r) use ($search_lower) {
+        return str_contains(strtolower($r['dataset_name'] ?? ''), $search_lower)
+            || str_contains(strtolower($r['sensitivity']  ?? ''), $search_lower);
+    });
+    $all_rows = array_values($all_rows);
+}
+
+$total_records = count($all_rows);
+$total_pages   = max(1, ceil($total_records / $per_page));
+$current_page  = min($current_page, $total_pages);
+$offset        = ($current_page - 1) * $per_page;
+$requests      = array_slice($all_rows, $offset, $per_page);
 
 $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
 $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -130,6 +109,7 @@ $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <title>My Requests — UKHSA Data Governance Portal</title>
 </head>
+
 <body>
 
     <main class="page-main">
@@ -140,34 +120,34 @@ $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
             </div>
 
             <?php if (!empty($request_success)): ?>
-            <div class="alert alert-success">
-                <span class="material-icons">check_circle</span>
-                <span><?php echo htmlspecialchars($request_success); ?></span>
-            </div>
+                <div class="alert alert-success">
+                    <span class="material-icons">check_circle</span>
+                    <span><?php echo htmlspecialchars($request_success); ?></span>
+                </div>
             <?php endif; ?>
 
             <?php if (!empty($request_error)): ?>
-            <div class="alert alert-error">
-                <span class="material-icons">error</span>
-                <span><?php echo htmlspecialchars($request_error); ?></span>
-            </div>
+                <div class="alert alert-error">
+                    <span class="material-icons">error</span>
+                    <span><?php echo htmlspecialchars($request_error); ?></span>
+                </div>
             <?php endif; ?>
 
             <div class="filter-tabs">
-                <a href="?filter=all<?php echo $search_query; ?>" 
-                   class="filter-tab <?php echo $filter === 'all' ? 'active' : ''; ?>">
+                <a href="?filter=all<?php echo $search_query; ?>"
+                    class="filter-tab <?php echo $filter === 'all' ? 'active' : ''; ?>">
                     All <span class="tab-count"><?php echo $count_all; ?></span>
                 </a>
-                <a href="?filter=pending<?php echo $search_query; ?>" 
-                   class="filter-tab <?php echo $filter === 'pending' ? 'active' : ''; ?>">
+                <a href="?filter=pending<?php echo $search_query; ?>"
+                    class="filter-tab <?php echo $filter === 'pending' ? 'active' : ''; ?>">
                     Pending <span class="tab-count"><?php echo $count_pending; ?></span>
                 </a>
-                <a href="?filter=approved<?php echo $search_query; ?>" 
-                   class="filter-tab <?php echo $filter === 'approved' ? 'active' : ''; ?>">
+                <a href="?filter=approved<?php echo $search_query; ?>"
+                    class="filter-tab <?php echo $filter === 'approved' ? 'active' : ''; ?>">
                     Approved <span class="tab-count"><?php echo $count_approved; ?></span>
                 </a>
-                <a href="?filter=rejected<?php echo $search_query; ?>" 
-                   class="filter-tab <?php echo $filter === 'rejected' ? 'active' : ''; ?>">
+                <a href="?filter=rejected<?php echo $search_query; ?>"
+                    class="filter-tab <?php echo $filter === 'rejected' ? 'active' : ''; ?>">
                     Rejected <span class="tab-count"><?php echo $count_rejected; ?></span>
                 </a>
             </div>
@@ -176,35 +156,34 @@ $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
                 <form method="GET" action="my_requests.php" class="search-form">
                     <input type="hidden" name="filter" value="<?php echo htmlspecialchars($filter); ?>">
                     <div class="search-input-group">
-                        <input 
-                            type="text" 
-                            name="search" 
+                        <input
+                            type="text"
+                            name="search"
                             class="search-input"
                             placeholder="Search by dataset name or sensitivity..."
-                            value="<?php echo htmlspecialchars($search); ?>"
-                        >
+                            value="<?php echo htmlspecialchars($search); ?>">
                         <button type="submit" class="search-btn">Search</button>
                     </div>
                 </form>
 
                 <?php if (!empty($search)): ?>
-                <div class="search-info">
-                    <span>
-                        Showing <strong><?php echo $total_records; ?></strong> 
-                        result<?php echo $total_records !== 1 ? 's' : ''; ?> 
-                        for "<strong><?php echo htmlspecialchars($search); ?></strong>"
-                    </span>
-                    <a href="?filter=<?php echo $filter; ?>" class="clear-search">Clear search</a>
-                </div>
+                    <div class="search-info">
+                        <span>
+                            Showing <strong><?php echo $total_records; ?></strong>
+                            result<?php echo $total_records !== 1 ? 's' : ''; ?>
+                            for "<strong><?php echo htmlspecialchars($search); ?></strong>"
+                        </span>
+                        <a href="?filter=<?php echo $filter; ?>" class="clear-search">Clear search</a>
+                    </div>
                 <?php endif; ?>
             </div>
 
             <div class="records-info">
-                Showing 
-                <strong><?php echo $total_records > 0 ? min($offset + 1, $total_records) : 0; ?></strong> 
-                to 
-                <strong><?php echo min($offset + $per_page, $total_records); ?></strong> 
-                of 
+                Showing
+                <strong><?php echo $total_records > 0 ? min($offset + 1, $total_records) : 0; ?></strong>
+                to
+                <strong><?php echo min($offset + $per_page, $total_records); ?></strong>
+                of
                 <strong><?php echo $total_records; ?></strong> requests
             </div>
 
@@ -222,101 +201,106 @@ $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
                     </thead>
                     <tbody>
                         <?php if (empty($requests)): ?>
-                        <tr>
-                            <td colspan="6" class="empty-row">
-                                <?php if (!empty($search)): ?>
-                                    No requests found matching "<?php echo htmlspecialchars($search); ?>".
-                                <?php elseif ($filter !== 'all'): ?>
-                                    No <?php echo htmlspecialchars($filter); ?> requests found.
-                                <?php else: ?>
-                                    You have no requests yet. 
-                                    <a href="dataset_catalogue.php">Browse datasets</a> to get started.
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php else: ?>
-                            <?php foreach ($requests as $req): ?>
                             <tr>
-                                <td class="dataset-name">
-                                    <?php echo htmlspecialchars($req['dataset_name']); ?>
-                                </td>
-                                <td>
-                                    <?php if ($req['sensitivity'] === 'Sensitive'): ?>
-                                        <span class="sensitivity-badge sensitive">Sensitive</span>
+                                <td colspan="6" class="empty-row">
+                                    <?php if (!empty($search)): ?>
+                                        No requests found matching "<?php echo htmlspecialchars($search); ?>".
+                                    <?php elseif ($filter !== 'all'): ?>
+                                        No <?php echo htmlspecialchars($filter); ?> requests found.
                                     <?php else: ?>
-                                        <span class="sensitivity-badge non-sensitive">Non-sensitive</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php
-                                    $status_class = '';
-                                    switch ($req['request_status']) {
-                                        case 'Approved': $status_class = 'approved'; break;
-                                        case 'Pending':  $status_class = 'pending';  break;
-                                        case 'Rejected': $status_class = 'rejected'; break;
-                                    }
-                                    ?>
-                                    <span class="status-badge <?php echo $status_class; ?>">
-                                        <?php echo htmlspecialchars($req['request_status']); ?>
-                                    </span>
-                                </td>
-                                <td class="date-cell">
-                                    <?php echo date('d M Y', strtotime($req['approved_date'])); ?>
-                                </td>
-                                <td class="date-cell">
-                                    <?php if ($req['expiry_date']): ?>
-                                        <?php 
-                                        $expiry = strtotime($req['expiry_date']);
-                                        $is_expired = $expiry < time();
-                                        $is_expiring = $expiry < strtotime('+30 days');
-                                        ?>
-                                        <span class="<?php echo $is_expired ? 'expired-text' : ($is_expiring ? 'expiring-text' : ''); ?>">
-                                            <?php echo date('d M Y', $expiry); ?>
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="no-date">—</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php if ($req['request_status'] === 'Approved'): ?>
-                                        <button 
-                                            type="button" 
-                                            class="btn-action btn-renew"
-                                            onclick="openRenewModal(
-                                                <?php echo $req['request_id']; ?>,
-                                                '<?php echo htmlspecialchars(addslashes($req['dataset_name'])); ?>',
-                                                '<?php echo $req['expiry_date'] ? date('d M Y', strtotime($req['expiry_date'])) : 'No expiry'; ?>'
-                                            )"
-                                        >
-                                            <span class="material-icons">autorenew</span> Renew
-                                        </button>
-
-                                    <?php elseif ($req['request_status'] === 'Pending'): ?>
-                                        <button 
-                                            type="button" 
-                                            class="btn-action btn-cancel"
-                                            onclick="openCancelModal(
-                                                <?php echo $req['request_id']; ?>,
-                                                '<?php echo htmlspecialchars(addslashes($req['dataset_name'])); ?>'
-                                            )"
-                                        >
-                                            <span class="material-icons">close</span> Cancel
-                                        </button>
-
-                                    <?php elseif ($req['request_status'] === 'Rejected'): ?>
-                                        <button 
-                                            type="button" 
-                                            class="btn-action btn-reason"
-                                            onclick="openReasonModal(
-                                                '<?php echo htmlspecialchars(addslashes($req['dataset_name'])); ?>',
-                                                '<?php echo htmlspecialchars(addslashes($req['approval_reason'] ?? 'No reason provided.')); ?>'
-                                            )"
-                                        >
-                                            <span class="material-icons">visibility</span> View Reason
-                                        </button>
+                                        You have no requests yet.
+                                        <a href="dataset_catalogue.php">Browse datasets</a> to get started.
                                     <?php endif; ?>
                                 </td>
                             </tr>
+                        <?php else: ?>
+                            <?php foreach ($requests as $req): ?>
+                                <tr>
+                                    <td class="dataset-name">
+                                        <?php echo htmlspecialchars($req['dataset_name']); ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($req['sensitivity'] === 'Sensitive'): ?>
+                                            <span class="sensitivity-badge sensitive">Sensitive</span>
+                                        <?php else: ?>
+                                            <span class="sensitivity-badge non-sensitive">Non-sensitive</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php
+                                        $status_class = '';
+                                        switch ($req['request_status']) {
+                                            case 'Approved':
+                                                $status_class = 'approved';
+                                                break;
+                                            case 'Pending':
+                                                $status_class = 'pending';
+                                                break;
+                                            case 'Rejected':
+                                                $status_class = 'rejected';
+                                                break;
+                                        }
+                                        ?>
+                                        <span class="status-badge <?php echo $status_class; ?>">
+                                            <?php echo htmlspecialchars($req['request_status']); ?>
+                                        </span>
+                                    </td>
+                                    <td class="date-cell">
+                                        <?php echo !empty($req['request_date'])
+                                            ? date('d M Y', strtotime($req['request_date']))
+                                            : '—'; ?>
+                                    </td>
+                                    <td class="date-cell">
+                                        <?php if (!empty($req['expiry_date'])): ?>
+                                            <?php
+                                            $expiry      = strtotime($req['expiry_date']);
+                                            $is_expired  = $expiry < time();
+                                            $is_expiring = $expiry < strtotime('+30 days');
+                                            ?>
+                                            <span class="<?php echo $is_expired ? 'expired-text' : ($is_expiring ? 'expiring-text' : ''); ?>">
+                                                <?php echo date('d M Y', $expiry); ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="no-date">—</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($req['request_status'] === 'Approved'): ?>
+                                            <button
+                                                type="button"
+                                                class="btn-action btn-renew"
+                                                onclick="openRenewModal(
+                                        <?php echo $req['request_id']; ?>,
+                                        '<?php echo htmlspecialchars(addslashes($req['dataset_name'])); ?>',
+                                        '<?php echo !empty($req['expiry_date']) ? date('d M Y', strtotime($req['expiry_date'])) : 'No expiry'; ?>'
+                                    )">
+                                                <span class="material-icons">autorenew</span> Renew
+                                            </button>
+
+                                        <?php elseif ($req['request_status'] === 'Pending'): ?>
+                                            <button
+                                                type="button"
+                                                class="btn-action btn-cancel"
+                                                onclick="openCancelModal(
+                                        <?php echo $req['request_id']; ?>,
+                                        '<?php echo htmlspecialchars(addslashes($req['dataset_name'])); ?>'
+                                    )">
+                                                <span class="material-icons">close</span> Cancel
+                                            </button>
+
+                                        <?php elseif ($req['request_status'] === 'Rejected'): ?>
+                                            <button
+                                                type="button"
+                                                class="btn-action btn-reason"
+                                                onclick="openReasonModal(
+                                        '<?php echo htmlspecialchars(addslashes($req['dataset_name'])); ?>',
+                                        '<?php echo htmlspecialchars(addslashes($req['approval_reason'] ?? 'No reason provided.')); ?>'
+                                    )">
+                                                <span class="material-icons">visibility</span> View Reason
+                                            </button>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
@@ -324,60 +308,60 @@ $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
             </div>
 
             <?php if ($total_pages > 1): ?>
-            <nav class="pagination">
-                <div class="pagination-info">
-                    Page <?php echo $current_page; ?> of <?php echo $total_pages; ?>
-                </div>
-                <div class="pagination-links">
+                <nav class="pagination">
+                    <div class="pagination-info">
+                        Page <?php echo $current_page; ?> of <?php echo $total_pages; ?>
+                    </div>
+                    <div class="pagination-links">
 
-                    <?php if ($current_page > 1): ?>
-                    <a href="?page=<?php echo $current_page - 1; ?>&filter=<?php echo $filter; ?><?php echo $search_query; ?>" class="pagination-btn">
-                        &laquo; Previous
-                    </a>
-                    <?php else: ?>
-                    <span class="pagination-btn disabled">&laquo; Previous</span>
-                    <?php endif; ?>
-
-                    <?php
-                    $start_page = max(1, $current_page - 2);
-                    $end_page   = min($total_pages, $current_page + 2);
-
-                    if ($start_page > 1): ?>
-                        <a href="?page=1&filter=<?php echo $filter; ?><?php echo $search_query; ?>" class="pagination-num">1</a>
-                        <?php if ($start_page > 2): ?>
-                            <span class="pagination-dots">...</span>
-                        <?php endif; ?>
-                    <?php endif; ?>
-
-                    <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
-                        <?php if ($i === $current_page): ?>
-                            <span class="pagination-num active"><?php echo $i; ?></span>
+                        <?php if ($current_page > 1): ?>
+                            <a href="?page=<?php echo $current_page - 1; ?>&filter=<?php echo $filter; ?><?php echo $search_query; ?>" class="pagination-btn">
+                                &laquo; Previous
+                            </a>
                         <?php else: ?>
-                            <a href="?page=<?php echo $i; ?>&filter=<?php echo $filter; ?><?php echo $search_query; ?>" class="pagination-num">
-                                <?php echo $i; ?>
+                            <span class="pagination-btn disabled">&laquo; Previous</span>
+                        <?php endif; ?>
+
+                        <?php
+                        $start_page = max(1, $current_page - 2);
+                        $end_page   = min($total_pages, $current_page + 2);
+
+                        if ($start_page > 1): ?>
+                            <a href="?page=1&filter=<?php echo $filter; ?><?php echo $search_query; ?>" class="pagination-num">1</a>
+                            <?php if ($start_page > 2): ?>
+                                <span class="pagination-dots">... </span>
+                            <?php endif; ?>
+                        <?php endif; ?>
+
+                        <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
+                            <?php if ($i === $current_page): ?>
+                                <span class="pagination-num active"><?php echo $i; ?></span>
+                            <?php else: ?>
+                                <a href="?page=<?php echo $i; ?>&filter=<?php echo $filter; ?><?php echo $search_query; ?>" class="pagination-num">
+                                    <?php echo $i; ?>
+                                </a>
+                            <?php endif; ?>
+                        <?php endfor; ?>
+
+                        <?php if ($end_page < $total_pages): ?>
+                            <?php if ($end_page < $total_pages - 1): ?>
+                                <span class="pagination-dots">...</span>
+                            <?php endif; ?>
+                            <a href="?page=<?php echo $total_pages; ?>&filter=<?php echo $filter; ?><?php echo $search_query; ?>" class="pagination-num">
+                                <?php echo $total_pages; ?>
                             </a>
                         <?php endif; ?>
-                    <?php endfor; ?>
 
-                    <?php if ($end_page < $total_pages): ?>
-                        <?php if ($end_page < $total_pages - 1): ?>
-                            <span class="pagination-dots">...</span>
+                        <?php if ($current_page < $total_pages): ?>
+                            <a href="?page=<?php echo $current_page + 1; ?>&filter=<?php echo $filter; ?><?php echo $search_query; ?>" class="pagination-btn">
+                                Next &raquo;
+                            </a>
+                        <?php else: ?>
+                            <span class="pagination-btn disabled">Next &raquo;</span>
                         <?php endif; ?>
-                        <a href="?page=<?php echo $total_pages; ?>&filter=<?php echo $filter; ?><?php echo $search_query; ?>" class="pagination-num">
-                            <?php echo $total_pages; ?>
-                        </a>
-                    <?php endif; ?>
 
-                    <?php if ($current_page < $total_pages): ?>
-                    <a href="?page=<?php echo $current_page + 1; ?>&filter=<?php echo $filter; ?><?php echo $search_query; ?>" class="pagination-btn">
-                        Next &raquo;
-                    </a>
-                    <?php else: ?>
-                    <span class="pagination-btn disabled">Next &raquo;</span>
-                    <?php endif; ?>
-
-                </div>
-            </nav>
+                    </div>
+                </nav>
             <?php endif; ?>
 
         </div>
@@ -392,9 +376,7 @@ $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
             <form method="POST" action="../actions/renew_action.php">
                 <div class="modal-body">
                     <input type="hidden" name="request_id" id="renew_request_id">
-                    <p class="modal-text">
-                        You are requesting to renew access for:
-                    </p>
+                    <p class="modal-text">You are requesting to renew access for:</p>
                     <p class="modal-dataset" id="renew_dataset_name"></p>
                     <p class="modal-expiry">
                         Current expiry: <strong id="renew_expiry_date"></strong>
@@ -403,13 +385,12 @@ $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
                         <label for="renew_purpose">
                             Reason for Renewal <span class="required">*</span>
                         </label>
-                        <textarea 
-                            id="renew_purpose" 
-                            name="purpose" 
-                            rows="3" 
+                        <textarea
+                            id="renew_purpose"
+                            name="purpose"
+                            rows="3"
                             placeholder="Explain why you need continued access..."
-                            required
-                        ></textarea>
+                            required></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -429,9 +410,7 @@ $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
             <form method="POST" action="../actions/cancel_action.php">
                 <div class="modal-body">
                     <input type="hidden" name="request_id" id="cancel_request_id">
-                    <p class="modal-text">
-                        Are you sure you want to cancel your request for:
-                    </p>
+                    <p class="modal-text">Are you sure you want to cancel your request for:</p>
                     <p class="modal-dataset" id="cancel_dataset_name"></p>
                     <p class="modal-warning">
                         <span class="material-icons">warning</span>
@@ -453,9 +432,7 @@ $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
                 <button type="button" class="modal-close" onclick="closeAllModals()">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="modal-text">
-                    Your request for the following dataset was rejected:
-                </p>
+                <p class="modal-text">Your request for the following dataset was rejected:</p>
                 <p class="modal-dataset" id="reason_dataset_name"></p>
                 <div class="reason-box">
                     <label>Reason provided by administrator:</label>
@@ -497,18 +474,15 @@ $filter_query = ($filter !== 'all') ? '&filter=' . urlencode($filter) : '';
 
         document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
             overlay.addEventListener('click', function(e) {
-                if (e.target === this) {
-                    closeAllModals();
-                }
+                if (e.target === this) closeAllModals();
             });
         });
 
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeAllModals();
-            }
+            if (e.key === 'Escape') closeAllModals();
         });
     </script>
 
 </body>
+
 </html>

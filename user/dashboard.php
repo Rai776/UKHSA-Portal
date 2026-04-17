@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once '../config/db_connect.php';
+require_once '../config/supabase.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: ../login.php');
@@ -24,7 +24,7 @@ function fetchAPI($url)
     curl_setopt($ch, CURLOPT_TIMEOUT, 8);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    $response = curl_exec($ch);
+    $response  = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
     if ($http_code !== 200) return null;
@@ -50,7 +50,7 @@ if ($onecall_data && isset($onecall_data['current'])) {
     $api_version  = '3.0';
     $weather_data = $onecall_data['current'];
     $hourly_data  = array_slice($onecall_data['hourly'] ?? [], 0, 12);
-    $daily_data   = array_slice($onecall_data['daily'] ?? [], 0, 5);
+    $daily_data   = array_slice($onecall_data['daily']  ?? [], 0, 5);
     $alerts_data  = $onecall_data['alerts'] ?? [];
 
     $overview_url  = "https://api.openweathermap.org/data/3.0/onecall/overview?lat={$lat}&lon={$lon}&units=metric&appid={$api_key}";
@@ -75,8 +75,8 @@ if ($onecall_data && isset($onecall_data['current'])) {
     $api_version = '2.5';
 }
 
-$news_url  = "https://www.gov.uk/api/search.json?filter_organisations=uk-health-security-agency&count=6&order=-public_timestamp&fields=title,description,public_timestamp,link";
-$news_json = fetchAPI($news_url);
+$news_url   = "https://www.gov.uk/api/search.json?filter_organisations=uk-health-security-agency&count=6&order=-public_timestamp&fields=title,description,public_timestamp,link";
+$news_json  = fetchAPI($news_url);
 $news_items = [];
 if ($news_json && isset($news_json['results'])) {
     $news_items = $news_json['results'];
@@ -96,7 +96,6 @@ if ($news_json && isset($news_json['results'])) {
 </head>
 
 <body>
-
     <?php include("navbar.php"); ?>
 
     <main class="dashboard-main">
@@ -107,10 +106,11 @@ if ($news_json && isset($news_json['results'])) {
                 <p>Welcome to the <strong>UKHSA Data Governance Portal</strong>. Use the navigation to browse datasets, manage your access requests, and track permissions.</p>
                 <div class="welcome-details">
                     <span class="detail-item"><strong>Role:</strong> <?php echo htmlspecialchars($_SESSION['role']); ?></span>
-                    <span class="detail-item"><strong>Team:</strong> <?php echo htmlspecialchars($_SESSION['team'] ?? 'N/A'); ?></span>
+                    <span class="detail-item"><strong>Team:</strong> <?php echo htmlspecialchars($_SESSION['team']     ?? 'N/A'); ?></span>
                     <span class="detail-item"><strong>Job Type:</strong> <?php echo htmlspecialchars($_SESSION['job_type'] ?? 'N/A'); ?></span>
                 </div>
             </div>
+
             <?php if (!empty($alerts_data)): ?>
                 <div class="alerts-section">
                     <?php foreach ($alerts_data as $alert): ?>
@@ -184,15 +184,14 @@ if ($news_json && isset($news_json['results'])) {
                         $desc       = ucfirst($weather_data['weather'][0]['description']);
                         $pressure   = $weather_data['main']['pressure'];
                         $sunrise    = isset($weather_data['sys']['sunrise']) ? date('H:i', $weather_data['sys']['sunrise']) : null;
-                        $sunset     = isset($weather_data['sys']['sunset']) ? date('H:i', $weather_data['sys']['sunset']) : null;
+                        $sunset     = isset($weather_data['sys']['sunset'])  ? date('H:i', $weather_data['sys']['sunset'])  : null;
                     }
                     ?>
 
                     <?php if ($temp !== null): ?>
                         <div class="weather-content">
                             <div class="weather-main">
-                                <img
-                                    src="https://openweathermap.org/img/wn/<?php echo $icon; ?>@2x.png"
+                                <img src="https://openweathermap.org/img/wn/<?php echo $icon; ?>@2x.png"
                                     alt="<?php echo htmlspecialchars($desc); ?>"
                                     class="weather-icon">
                                 <div class="weather-temp">
@@ -275,7 +274,6 @@ if ($news_json && isset($news_json['results'])) {
                     <?php endif; ?>
                 </div>
 
-                <!-- UKHSA NEWS -->
                 <div class="widget-card news-card">
                     <div class="widget-header">
                         <span class="material-icons">newspaper</span>
@@ -323,6 +321,7 @@ if ($news_json && isset($news_json['results'])) {
                 </div>
 
             </div>
+
             <?php if (!empty($hourly_data)): ?>
                 <div class="forecast-section">
                     <div class="section-header">
@@ -334,7 +333,7 @@ if ($news_json && isset($news_json['results'])) {
                             <?php
                             if ($api_version === '3.0') {
                                 $h_time = date('H:i', $h['dt']);
-                                $h_day  = date('D', $h['dt']);
+                                $h_day  = date('D',   $h['dt']);
                                 $h_temp = round($h['temp']);
                                 $h_icon = $h['weather'][0]['icon'];
                                 $h_desc = ucfirst($h['weather'][0]['description']);
@@ -342,7 +341,7 @@ if ($news_json && isset($news_json['results'])) {
                                 $h_pop  = isset($h['pop']) ? round($h['pop'] * 100) : 0;
                             } else {
                                 $h_time = date('H:i', $h['dt']);
-                                $h_day  = date('D', $h['dt']);
+                                $h_day  = date('D',   $h['dt']);
                                 $h_temp = round($h['main']['temp']);
                                 $h_icon = $h['weather'][0]['icon'];
                                 $h_desc = ucfirst($h['weather'][0]['description']);
@@ -372,6 +371,7 @@ if ($news_json && isset($news_json['results'])) {
                     </div>
                 </div>
             <?php endif; ?>
+
             <?php if (!empty($daily_data) && $api_version === '3.0'): ?>
                 <div class="forecast-section">
                     <div class="section-header">
@@ -381,7 +381,7 @@ if ($news_json && isset($news_json['results'])) {
                     <div class="daily-grid">
                         <?php foreach ($daily_data as $d): ?>
                             <?php
-                            $d_day     = date('l', $d['dt']);
+                            $d_day     = date('l',   $d['dt']);
                             $d_date    = date('d M', $d['dt']);
                             $d_icon    = $d['weather'][0]['icon'];
                             $d_desc    = ucfirst($d['weather'][0]['description']);

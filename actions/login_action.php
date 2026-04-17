@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once '../config/db_connect.php';
+require_once '../config/supabase.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['login'])) {
     header('Location: ../login.php');
@@ -17,32 +17,18 @@ if (empty($username) || empty($password)) {
     exit();
 }
 
-$query = '
-    SELECT 
-        user_id, 
-        username, 
-        password_hash, 
-        full_name, 
-        email, 
-        team,
-        system_role, 
-        job_type,
-        training_completed,
-        training_expiry
-    FROM "User"
-    WHERE LOWER(username) = LOWER($1)
-';
+$result = supabaseRequest(
+    'User?select=user_id,username,password_hash,full_name,email,team,system_role,job_type,training_completed,training_expiry&username=ilike.' . urlencode($username)
+);
 
-$result = pg_query_params($conn, $query, [$username]);
-
-if (!$result) {
-    error_log("Login query error: " . pg_last_error($conn));
+if (isset($result['error']) || !is_array($result)) {
+    error_log("Login query error: " . json_encode($result));
     $_SESSION['login_error'] = 'A system error occurred. Please try again later.';
     header('Location: ../login.php');
     exit();
 }
 
-$user = pg_fetch_assoc($result);
+$user = $result[0] ?? null;
 
 if ($user && password_verify($password, $user['password_hash'])) {
 
@@ -58,16 +44,16 @@ if ($user && password_verify($password, $user['password_hash'])) {
     $_SESSION['training_completed'] = $user['training_completed'];
     $_SESSION['training_expiry']    = $user['training_expiry'];
 
-    $log_query = '
-        INSERT INTO "Audit_Log" (user_id, action, target_table, target_id)
-        VALUES ($1, $2, $3, $4)
-    ';
-    @pg_query_params($conn, $log_query, [
-        $user['user_id'],
-        'LOGIN: ' . $user['system_role'],
-        'User',
-        $user['user_id']
-    ]);
+    supabaseRequest(
+        'Audit_Log',
+        'POST',
+        [
+            'user_id'      => $user['user_id'],
+            'action'       => 'LOGIN: ' . $user['system_role'],
+            'target_table' => 'User',
+            'target_id'    => $user['user_id']
+        ]
+    );
 
     if ($user['system_role'] === 'Administrator') {
         header('Location: ../admin/dashboard.php');
@@ -77,19 +63,20 @@ if ($user && password_verify($password, $user['password_hash'])) {
     exit();
 
 } else {
+
     $_SESSION['login_error']    = 'Invalid username or password.';
     $_SESSION['login_username'] = $username;
 
-    $log_query = '
-        INSERT INTO "Audit_Log" (user_id, action, target_table, target_id)
-        VALUES ($1, $2, $3, $4)
-    ';
-    @pg_query_params($conn, $log_query, [
-        null,
-        'LOGIN_FAILED: ' . $username,
-        'User',
-        null
-    ]);
+    supabaseRequest(
+        'Audit_Log',
+        'POST',
+        [
+            'user_id'      => null,
+            'action'       => 'LOGIN_FAILED: ' . $username,
+            'target_table' => 'User',
+            'target_id'    => null
+        ]
+    );
 
     header('Location: ../login.php');
     exit();

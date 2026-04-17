@@ -1,24 +1,36 @@
 <?php
 session_start();
-require_once '../config/db_connect.php';
-include("navbar.php");
-
-$expire_query = '
-    UPDATE "Access_Request"
-    SET request_status = \'Rejected\',
-        approval_reason = \'Access expired automatically on \' || expiry_date::TEXT
-    WHERE request_status = \'Approved\'
-    AND expiry_date IS NOT NULL
-    AND expiry_date < CURRENT_DATE
-';
-$expire_result = pg_query($conn, $expire_query);
+require_once '../config/supabase.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: ../login.php');
     exit();
 }
 
-$request_error   = $_SESSION['request_error'] ?? '';
+include("navbar.php");
+
+$today           = date('Y-m-d');
+$expired_requests = supabaseRequest(
+    'Access_Request?select=request_id,expiry_date' .
+    '&request_status=eq.Approved' .
+    '&expiry_date=not.is.null' .
+    '&expiry_date=lt.' . $today
+);
+
+if (!empty($expired_requests) && !isset($expired_requests['error'])) {
+    foreach ($expired_requests as $expired) {
+        supabaseRequest(
+            'Access_Request?request_id=eq.' . $expired['request_id'],
+            'PATCH',
+            [
+                'request_status'  => 'Rejected',
+                'approval_reason' => 'Access expired automatically on ' . $expired['expiry_date']
+            ]
+        );
+    }
+}
+
+$request_error   = $_SESSION['request_error']   ?? '';
 $request_success = $_SESSION['request_success'] ?? '';
 unset($_SESSION['request_error']);
 unset($_SESSION['request_success']);
@@ -28,79 +40,47 @@ $current_page = max(1, intval($_GET['page'] ?? 1));
 $per_page     = 5;
 $offset       = ($current_page - 1) * $per_page;
 
-if (!empty($search)) {
-    $count_query = '
-        SELECT COUNT(*) as total FROM "Dataset"
-        WHERE LOWER(name) LIKE LOWER($1)
-        OR LOWER(description) LIKE LOWER($1)
-        OR LOWER(category) LIKE LOWER($1)
-        OR LOWER(sensitivity) LIKE LOWER($1)
-        AND Active = True
-    ';
-    $count_result = pg_query_params($conn, $count_query, ['%' . $search . '%']);
-} else {
-    $count_result = pg_query($conn, 'SELECT COUNT(*) as total FROM "Dataset"');
-}
+$all_datasets = supabaseRequest(
+    'Dataset?select=dataset_id,name,description,category,sensitivity&active=eq.true&order=name.asc'
+);
 
-$total_records = 0;
-if ($count_result) {
-    $count_row     = pg_fetch_assoc($count_result);
-    $total_records = intval($count_row['total']);
+if (isset($all_datasets['error']) || !is_array($all_datasets)) {
+    $all_datasets = [];
 }
-$total_pages = max(1, ceil($total_records / $per_page));
 
 if (!empty($search)) {
-    $ds_query = '
-        SELECT dataset_id, name, description, category, sensitivity
-        FROM "Dataset"
-        WHERE LOWER(name) LIKE LOWER($1)
-        OR LOWER(description) LIKE LOWER($1)
-        OR LOWER(category) LIKE LOWER($1)
-        OR LOWER(sensitivity) LIKE LOWER($1)
-        AND Active = True
-        ORDER BY name ASC
-        LIMIT $2 OFFSET $3
-    ';
-    $ds_result = pg_query_params($conn, $ds_query, ['%' . $search . '%', $per_page, $offset]);
-} else {
-    $ds_query = '
-        SELECT dataset_id, name, description, category, sensitivity
-        FROM "Dataset"
-        WHERE Active = True
-        ORDER BY name ASC
-        LIMIT $1 OFFSET $2
-    ';
-    $ds_result = pg_query_params($conn, $ds_query, [$per_page, $offset]);
+    $search_lower = strtolower($search);
+    $all_datasets = array_filter($all_datasets, function($ds) use ($search_lower) {
+        return str_contains(strtolower($ds['name']        ?? ''), $search_lower)
+            || str_contains(strtolower($ds['description'] ?? ''), $search_lower)
+            || str_contains(strtolower($ds['category']    ?? ''), $search_lower)
+            || str_contains(strtolower($ds['sensitivity'] ?? ''), $search_lower);
+    });
+    $all_datasets = array_values($all_datasets);
 }
 
-$datasets = [];
-if ($ds_result) {
-    while ($row = pg_fetch_assoc($ds_result)) {
-        $datasets[] = $row;
-    }
-}
+$total_records = count($all_datasets);
+$total_pages   = max(1, ceil($total_records / $per_page));
+$current_page  = min($current_page, $total_pages);
+$offset        = ($current_page - 1) * $per_page;
+$datasets      = array_slice($all_datasets, $offset, $per_page);
 
-$req_query = '
-    SELECT dataset_id, request_status
-    FROM "Access_Request"
-    WHERE user_id = $1
-    AND (request_status = $2 OR request_status = $3)
-';
-$req_result = pg_query_params($conn, $req_query, [
-    $_SESSION['user_id'],
-    'Pending',
-    'Approved'
-]);
+$req_result = supabaseRequest(
+    'Access_Request?select=dataset_id,request_status' .
+    '&user_id=eq.' . $_SESSION['user_id'] .
+    '&or=(request_status.eq.Pending,request_status.eq.Approved)'
+);
 
 $user_requests = [];
-if ($req_result) {
-    while ($row = pg_fetch_assoc($req_result)) {
+if (!empty($req_result) && !isset($req_result['error'])) {
+    foreach ($req_result as $row) {
         $user_requests[$row['dataset_id']] = $row['request_status'];
     }
 }
 
 $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -135,10 +115,10 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                 <div class="search-wrapper">
                     <label for="search" class="search-label">Search datasets</label>
                     <div class="search-input-group">
-                        <input 
-                            type="text" 
-                            id="search" 
-                            name="search" 
+                        <input
+                            type="text"
+                            id="search"
+                            name="search"
                             class="search-input"
                             placeholder="Search by name, description, category or sensitivity..."
                             value="<?php echo htmlspecialchars($search); ?>"
@@ -151,8 +131,8 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
             <?php if (!empty($search)): ?>
             <div class="search-info">
                 <span>
-                    Showing <strong><?php echo $total_records; ?></strong> 
-                    result<?php echo $total_records !== 1 ? 's' : ''; ?> 
+                    Showing <strong><?php echo $total_records; ?></strong>
+                    result<?php echo $total_records !== 1 ? 's' : ''; ?>
                     for "<strong><?php echo htmlspecialchars($search); ?></strong>"
                 </span>
                 <a href="dataset_catalogue.php" class="clear-search">Clear search</a>
@@ -162,11 +142,11 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
 
         <div class="records-info">
             <span>
-                Showing 
-                <strong><?php echo min($offset + 1, $total_records); ?></strong> 
-                to 
-                <strong><?php echo min($offset + $per_page, $total_records); ?></strong> 
-                of 
+                Showing
+                <strong><?php echo min($offset + 1, $total_records); ?></strong>
+                to
+                <strong><?php echo min($offset + $per_page, $total_records); ?></strong>
+                of
                 <strong><?php echo $total_records; ?></strong> datasets
             </span>
         </div>
@@ -194,51 +174,48 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                         </td>
                     </tr>
                     <?php else: ?>
-                        <?php foreach ($datasets as $dataset): ?>
-                        <tr>
-                            <td class="dataset-name">
-                                <?php echo htmlspecialchars($dataset['name']); ?>
-                            </td>
-                            <td class="dataset-desc">
-                                <?php echo htmlspecialchars($dataset['description']); ?>
-                            </td>
-                            <td>
-                                <span class="category-badge">
-                                    <?php echo htmlspecialchars($dataset['category'] ?? 'General'); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php if ($dataset['sensitivity'] === 'Sensitive'): ?>
-                                    <span class="sensitivity-badge sensitive">Sensitive</span>
-                                <?php else: ?>
-                                    <span class="sensitivity-badge non-sensitive">Non-sensitive</span>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php
-                                $status = $user_requests[$dataset['dataset_id']] ?? null;
-
-                                if ($status === 'Approved'):
-                                ?>
-                                    <span class="status-badge approved">Approved</span>
-                                <?php elseif ($status === 'Pending'): ?>
-                                    <span class="status-badge pending">Pending</span>
-                                <?php else: ?>
-                                    <button 
-                                        type="button" 
-                                        class="btn-request"
-                                        onclick="openModal(
-                                            <?php echo $dataset['dataset_id']; ?>,
-                                            '<?php echo htmlspecialchars(addslashes($dataset['name'])); ?>',
-                                            '<?php echo htmlspecialchars($dataset['sensitivity']); ?>'
-                                        )"
-                                    >
-                                        Request
-                                    </button>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
+                    <?php foreach ($datasets as $dataset): ?>
+                    <tr>
+                        <td class="dataset-name">
+                            <?php echo htmlspecialchars($dataset['name']); ?>
+                        </td>
+                        <td class="dataset-desc">
+                            <?php echo htmlspecialchars($dataset['description']); ?>
+                        </td>
+                        <td>
+                            <span class="category-badge">
+                                <?php echo htmlspecialchars($dataset['category'] ?? 'General'); ?>
+                            </span>
+                        </td>
+                        <td>
+                            <?php if ($dataset['sensitivity'] === 'Sensitive'): ?>
+                                <span class="sensitivity-badge sensitive">Sensitive</span>
+                            <?php else: ?>
+                                <span class="sensitivity-badge non-sensitive">Non-sensitive</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php $status = $user_requests[$dataset['dataset_id']] ?? null; ?>
+                            <?php if ($status === 'Approved'): ?>
+                                <span class="status-badge approved">Approved</span>
+                            <?php elseif ($status === 'Pending'): ?>
+                                <span class="status-badge pending">Pending</span>
+                            <?php else: ?>
+                                <button
+                                    type="button"
+                                    class="btn-request"
+                                    onclick="openModal(
+                                        <?php echo $dataset['dataset_id']; ?>,
+                                        '<?php echo htmlspecialchars(addslashes($dataset['name'])); ?>',
+                                        '<?php echo htmlspecialchars($dataset['sensitivity']); ?>'
+                                    )"
+                                >
+                                    Request
+                                </button>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -271,13 +248,13 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                 <?php endif; ?>
 
                 <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
-                    <?php if ($i === $current_page): ?>
-                        <span class="pagination-num active"><?php echo $i; ?></span>
-                    <?php else: ?>
-                        <a href="?page=<?php echo $i; ?><?php echo $search_query; ?>" class="pagination-num">
-                            <?php echo $i; ?>
-                        </a>
-                    <?php endif; ?>
+                <?php if ($i === $current_page): ?>
+                    <span class="pagination-num active"><?php echo $i; ?></span>
+                <?php else: ?>
+                    <a href="?page=<?php echo $i; ?><?php echo $search_query; ?>" class="pagination-num">
+                        <?php echo $i; ?>
+                    </a>
+                <?php endif; ?>
                 <?php endfor; ?>
 
                 <?php if ($end_page < $total_pages): ?>
@@ -308,7 +285,6 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                 <h2>Request Dataset Access</h2>
                 <button type="button" class="modal-close" onclick="closeModal()">&times;</button>
             </div>
-
             <form method="POST" action="../actions/request_action.php">
                 <div class="modal-body">
                     <div class="form-group">
@@ -316,41 +292,37 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
                         <input type="text" id="modal_dataset_name" readonly>
                         <input type="hidden" name="dataset_id" id="modal_dataset_id">
                     </div>
-
                     <div class="form-group">
                         <label for="modal_sensitivity">Sensitivity Level</label>
                         <input type="text" id="modal_sensitivity" readonly>
                     </div>
-
                     <div class="form-group">
                         <label for="modal_purpose">
                             Purpose of Request <span class="required">*</span>
                         </label>
-                        <textarea 
-                            id="modal_purpose" 
-                            name="purpose" 
-                            rows="4" 
+                        <textarea
+                            id="modal_purpose"
+                            name="purpose"
+                            rows="4"
                             placeholder="Explain why you need access to this dataset..."
                             required
                         ></textarea>
                     </div>
-
                     <div class="form-group checkbox-group">
                         <label class="checkbox-label">
-                            <input 
-                                type="checkbox" 
-                                name="training_confirmed" 
-                                id="modal_training" 
+                            <input
+                                type="checkbox"
+                                name="training_confirmed"
+                                id="modal_training"
                                 required
                             >
                             <span class="checkbox-text">
-                                I confirm that I have completed the mandatory 
+                                I confirm that I have completed the mandatory
                                 <strong>UKHSA Data Handling &amp; Privacy</strong> training.
                             </span>
                         </label>
                     </div>
                 </div>
-
                 <div class="modal-footer">
                     <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
                     <button type="submit" name="submit_request" class="btn-submit">Submit Request</button>
@@ -361,11 +333,11 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
 
     <script>
         function openModal(datasetId, datasetName, sensitivity) {
-            document.getElementById('modal_dataset_id').value = datasetId;
+            document.getElementById('modal_dataset_id').value   = datasetId;
             document.getElementById('modal_dataset_name').value = datasetName;
-            document.getElementById('modal_sensitivity').value = sensitivity;
-            document.getElementById('modal_purpose').value = '';
-            document.getElementById('modal_training').checked = false;
+            document.getElementById('modal_sensitivity').value  = sensitivity;
+            document.getElementById('modal_purpose').value      = '';
+            document.getElementById('modal_training').checked   = false;
             document.getElementById('requestModal').classList.add('active');
         }
 
@@ -374,15 +346,11 @@ $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
         }
 
         document.getElementById('requestModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeModal();
-            }
+            if (e.target === this) closeModal();
         });
 
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeModal();
-            }
+            if (e.key === 'Escape') closeModal();
         });
     </script>
 </body>

@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once '../config/db_connect.php';
+require_once '../config/supabase.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Administrator') {
     header('Location: ../login.php');
@@ -8,48 +8,55 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Administrator') {
 }
 
 if (isset($_POST['submit_request'])) {
-    $name        = trim($_POST['name'] ?? '');
+    $name        = trim($_POST['name']        ?? '');
     $description = trim($_POST['description'] ?? '');
-    $category    = trim($_POST['category'] ?? '');
-    $sensitivity = $_POST['sensitivity'] ?? '';
-    $active      = $_POST['active'] ?? '';
+    $category    = trim($_POST['category']    ?? '');
+    $sensitivity = $_POST['sensitivity']      ?? '';
+    $active_raw  = $_POST['active']           ?? 'true';
+    $active      = ($active_raw === 'true' || $active_raw === '1' || $active_raw === true);
 
-    if ($name !== '' && $description !== '' && $category !== '' && ($sensitivity === 'Sensitive' || $sensitivity === 'Non-sensitive') && ($active == true || $active == false)) {
-        $insert_query = '
-            INSERT INTO "Dataset" (name, description, category, sensitivity, active)
-            VALUES ($1, $2, $3, $4, $5)
-        ';
-        $result = pg_query_params($conn, $insert_query, [
-            $name,
-            $description,
-            $category,
-            $sensitivity,
-            $active
-        ]);
+    if (
+        $name        !== '' &&
+        $description !== '' &&
+        $category    !== '' &&
+        ($sensitivity === 'Sensitive' || $sensitivity === 'Non-sensitive')
+    ) {
+        $insert_result = supabaseRequest(
+            'Dataset',
+            'POST',
+            [
+                'name'        => $name,
+                'description' => $description,
+                'category'    => $category,
+                'sensitivity' => $sensitivity,
+                'active'      => $active
+            ],
+            ['Prefer: return=representation']
+        );
+
+        if (isset($insert_result['error']) || empty($insert_result)) {
+            error_log("Failed to insert dataset: " . json_encode($insert_result));
+            header('Location: ../admin/rules_management.php?error=Failed+to+create+dataset');
+            exit();
+        }
+
+        $dataset_id = $insert_result[0]['dataset_id'];
+
+        if (isset($_SESSION['user_id'])) {
+            supabaseRequest(
+                'Audit_Log',
+                'POST',
+                [
+                    'user_id'      => $_SESSION['user_id'],
+                    'action'       => 'CREATE',
+                    'target_table' => 'Dataset',
+                    'target_id'    => $dataset_id
+                ]
+            );
+        }
     }
-}
-
-$select_query = '
-    SELECT dataset_id FROM "Dataset"
-    ORDER BY dataset_id DESC
-    LIMIT 1';
-
-$result = pg_query($conn, $select_query);
-$row = pg_fetch_assoc($result);
-$dataset_id = $row['dataset_id'];
-
-if (isset($_SESSION['user_id'])) {
-    $log_query = '
-        INSERT INTO "Audit_Log" (user_id, action, target_table, target_id)
-        VALUES ($1, $2, $3, $4)';
-
-    @pg_query_params($conn, $log_query, [
-        $_SESSION['user_id'],
-        'CREATE',
-        'Dataset',
-        $dataset_id
-    ]);
 }
 
 header('Location: ../admin/rules_management.php');
 exit();
+?> 

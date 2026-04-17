@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once '../config/db_connect.php';
+require_once '../config/supabase.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: ../login.php');
@@ -15,25 +15,19 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     $search_export = trim($_GET['search'] ?? '');
 
     if (!empty($search_export)) {
-        $export_result = pg_query_params($conn, '
-            SELECT user_id, action, target_table, target_id, timestamp
-            FROM "Audit_Log"
-            WHERE CAST(user_id AS text) LIKE LOWER($1)
-            OR LOWER(action) LIKE LOWER($1)
-            OR LOWER(target_table) LIKE LOWER($1)
-            OR CAST(target_id AS text) LIKE LOWER($1)
-            ORDER BY timestamp ASC
-        ', ['%' . $search_export . '%']);
+        $export_result = supabaseRequest(
+            'Audit_Log?select=user_id,action,target_table,target_id,timestamp' .
+            '&or=(action.ilike.*' . urlencode($search_export) . '*,target_table.ilike.*' . urlencode($search_export) . '*)' .
+            '&order=timestamp.asc'
+        );
     } else {
-        $export_result = pg_query($conn, '
-            SELECT user_id, action, target_table, target_id, timestamp
-            FROM "Audit_Log"
-            ORDER BY timestamp ASC
-        ');
+        $export_result = supabaseRequest(
+            'Audit_Log?select=user_id,action,target_table,target_id,timestamp&order=timestamp.asc'
+        );
     }
 
-    if (!$export_result) {
-        die('Export failed: ' . pg_last_error($conn));
+    if (isset($export_result['error'])) {
+        die('Export failed: ' . json_encode($export_result['error']));
     }
 
     $filename = 'audit_log_' . date('Y-m-d_H-i-s') . '.csv';
@@ -46,7 +40,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
     fputcsv($output, ['User ID', 'Action', 'Target Table', 'Target ID', 'Timestamp']);
 
-    while ($row = pg_fetch_assoc($export_result)) {
+    foreach ($export_result as $row) {
         fputcsv($output, [
             $row['user_id']      ?? 'N/A',
             $row['action']       ?? 'N/A',
@@ -60,63 +54,36 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     exit();
 }
 
-
 $search       = trim($_GET['search'] ?? '');
 $current_page = max(1, intval($_GET['page'] ?? 1));
 $per_page     = 5;
 $offset       = ($current_page - 1) * $per_page;
 
 if (!empty($search)) {
-    $count_query = '
-        SELECT COUNT(*) as total FROM "Audit_Log"
-        WHERE CAST(user_id AS text) LIKE LOWER($1)
-        OR LOWER(action) LIKE LOWER($1)
-        OR LOWER(target_table) LIKE LOWER($1)
-        OR CAST(target_id AS text) LIKE LOWER($1)
-    ';
-    $count_result = pg_query_params($conn, $count_query, ['%' . $search . '%']);
+    $all_logs = supabaseRequest(
+        'Audit_Log?select=user_id,action,target_table,target_id,timestamp' .
+        '&or=(action.ilike.*' . urlencode($search) . '*,target_table.ilike.*' . urlencode($search) . '*)' .
+        '&order=timestamp.asc'
+    );
 } else {
-    $count_result = pg_query($conn, 'SELECT COUNT(*) as total FROM "Audit_Log"');
+    $all_logs = supabaseRequest(
+        'Audit_Log?select=user_id,action,target_table,target_id,timestamp&order=timestamp.asc'
+    );
 }
 
-$total_records = 0;
-if ($count_result) {
-    $count_row     = pg_fetch_assoc($count_result);
-    $total_records = intval($count_row['total']);
-}
-$total_pages = max(1, ceil($total_records / $per_page));
-
-if (!empty($search)) {
-    $ds_query = '
-        SELECT user_id, action, target_table, target_id, timestamp
-        FROM "Audit_Log"
-        WHERE CAST(user_id AS text) LIKE LOWER($1)
-        OR LOWER(action) LIKE LOWER($1)
-        OR LOWER(target_table) LIKE LOWER($1)
-        OR CAST(target_id AS text) LIKE LOWER($1)
-        ORDER BY timestamp ASC
-        LIMIT $2 OFFSET $3
-    ';
-    $ds_result = pg_query_params($conn, $ds_query, ['%' . $search . '%', $per_page, $offset]);
-} else {
-    $ds_query = '
-        SELECT user_id, action, target_table, target_id, timestamp
-        FROM "Audit_Log"
-        ORDER BY timestamp ASC
-        LIMIT $1 OFFSET $2
-    ';
-    $ds_result = pg_query_params($conn, $ds_query, [$per_page, $offset]);
+if (isset($all_logs['error']) || !is_array($all_logs)) {
+    $all_logs = [];
 }
 
-$logs = [];
-if ($ds_result) {
-    while ($row = pg_fetch_assoc($ds_result)) {
-        $logs[] = $row;
-    }
-}
+$total_records = count($all_logs);
+$total_pages   = max(1, ceil($total_records / $per_page));
+$current_page  = min($current_page, $total_pages);
+$offset        = ($current_page - 1) * $per_page;
+
+$logs = array_slice($all_logs, $offset, $per_page);
+
 $search_query = !empty($search) ? '&search=' . urlencode($search) : '';
-$export_url = 'audit_trail.php?export=csv' . $search_query;
-
+$export_url   = 'audit_trail.php?export=csv' . $search_query;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -128,16 +95,14 @@ $export_url = 'audit_trail.php?export=csv' . $search_query;
 </head>
 
 <body>
-    <?php
-    include("navbar.php");
-    ?>
+    <?php include("navbar.php"); ?>
     <div class="page-container">
         <div class="header-content">
             <div class="page-header">
                 <h1>Audit Log</h1>
                 <p>View all user actions</p>
             </div>
-            <a href= "<?php echo htmlspecialchars($export_url); ?>" class = "btn-export">
+            <a href="<?php echo htmlspecialchars($export_url); ?>" class="btn-export">
                 Export as CSV
             </a>
         </div>
@@ -152,7 +117,7 @@ $export_url = 'audit_trail.php?export=csv' . $search_query;
                             id="search" 
                             name="search" 
                             class="search-input"
-                            placeholder="Search by User ID, action, target table or target ID..."
+                            placeholder="Search by action or target table..."
                             value="<?php echo htmlspecialchars($search); ?>"
                         >
                         <button type="submit" class="search-btn">Search</button>
@@ -209,7 +174,7 @@ $export_url = 'audit_trail.php?export=csv' . $search_query;
                         <?php foreach ($logs as $log): ?>
                         <tr>
                             <td class="log-user-id">
-                                <?php echo htmlspecialchars($log['user_id'] ?? "N/A"); ?>
+                                <?php echo htmlspecialchars($log['user_id'] ?? 'N/A'); ?>
                             </td>
                             <td class="log-action">
                                 <?php echo htmlspecialchars($log['action']); ?>
@@ -221,12 +186,12 @@ $export_url = 'audit_trail.php?export=csv' . $search_query;
                             </td>
                             <td>
                                 <span class="log-target-id">
-                                    <?php echo htmlspecialchars($log['target_id'] ?? "N/A"); ?>
+                                    <?php echo htmlspecialchars($log['target_id'] ?? 'N/A'); ?>
                                 </span>
                             </td>
                             <td>
                                 <span class="log-timestamp">
-                                    <?php echo htmlspecialchars($log['timestamp'] ?? "N/A"); ?>
+                                    <?php echo htmlspecialchars($log['timestamp'] ?? 'N/A'); ?>
                                 </span>
                             </td>
                         </tr>
@@ -237,59 +202,61 @@ $export_url = 'audit_trail.php?export=csv' . $search_query;
         </div>
 
         <?php if ($total_pages > 1): ?>
-            <nav class="pagination">
-                <div class="pagination-info">
-                    Page <?php echo $current_page; ?> of <?php echo $total_pages; ?>
-                </div>
-                <div class="pagination-links">
+        <nav class="pagination">
+            <div class="pagination-info">
+                Page <?php echo $current_page; ?> of <?php echo $total_pages; ?>
+            </div>
+            <div class="pagination-links">
 
-                    <?php if ($current_page > 1): ?>
-                    <a href="?page=<?php echo $current_page - 1; ?><?php echo $search_query; ?>" class="pagination-btn">
-                        &laquo; Previous
-                    </a>
+                <?php if ($current_page > 1): ?>
+                <a href="?page=<?php echo $current_page - 1; ?><?php echo $search_query; ?>" class="pagination-btn">
+                    &laquo; Previous
+                </a>
+                <?php else: ?>
+                <span class="pagination-btn disabled">&laquo; Previous</span>
+                <?php endif; ?>
+
+                <?php
+                $start_page = max(1, $current_page - 2);
+                $end_page   = min($total_pages, $current_page + 2);
+
+                if ($start_page > 1): ?>
+                    <a href="?page=1<?php echo $search_query; ?>" class="pagination-num">1</a>
+                    <?php if ($start_page > 2): ?>
+                        <span class="pagination-dots">...</span>
+                    <?php endif; ?>
+                <?php endif; ?>
+
+                <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
+                    <?php if ($i === $current_page): ?>
+                        <span class="pagination-num active"><?php echo $i; ?></span>
                     <?php else: ?>
-                    <span class="pagination-btn disabled">&laquo; Previous</span>
-                    <?php endif; ?>
-
-                    <?php
-                    $start_page = max(1, $current_page - 2);
-                    $end_page   = min($total_pages, $current_page + 2);
-
-                    if ($start_page > 1): ?>
-                        <a href="?page=1<?php echo $search_query; ?>" class="pagination-num">1</a>
-                        <?php if ($start_page > 2): ?>
-                            <span class="pagination-dots">...</span>
-                        <?php endif; ?>
-                    <?php endif; ?>
-
-                    <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
-                        <?php if ($i === $current_page): ?>
-                            <span class="pagination-num active"><?php echo $i; ?></span>
-                        <?php else: ?>
-                            <a href="?page=<?php echo $i; ?><?php echo $search_query; ?>" class="pagination-num">
-                                <?php echo $i; ?>
-                            </a>
-                        <?php endif; ?>
-                    <?php endfor; ?>
-
-                    <?php if ($end_page < $total_pages): ?>
-                        <?php if ($end_page < $total_pages - 1): ?>
-                            <span class="pagination-dots">...</span>
-                        <?php endif; ?>
-                        <a href="?page=<?php echo $total_pages; ?><?php echo $search_query; ?>" class="pagination-num">
-                            <?php echo $total_pages; ?>
+                        <a href="?page=<?php echo $i; ?><?php echo $search_query; ?>" class="pagination-num">
+                            <?php echo $i; ?>
                         </a>
                     <?php endif; ?>
+                <?php endfor; ?>
 
-                    <?php if ($current_page < $total_pages): ?>
-                    <a href="?page=<?php echo $current_page + 1; ?><?php echo $search_query; ?>" class="pagination-btn">
-                        Next &raquo;
-                    </a>
-                    <?php else: ?>
-                    <span class="pagination-btn disabled">Next &raquo;</span>
+                <?php if ($end_page < $total_pages): ?>
+                    <?php if ($end_page < $total_pages - 1): ?>
+                        <span class="pagination-dots">...</span>
                     <?php endif; ?>
+                    <a href="?page=<?php echo $total_pages; ?><?php echo $search_query; ?>" class="pagination-num">
+                        <?php echo $total_pages; ?>
+                    </a>
+                <?php endif; ?>
 
-                </div>
-            </nav>
-            <?php endif; ?>
-        </div>
+                <?php if ($current_page < $total_pages): ?>
+                <a href="?page=<?php echo $current_page + 1; ?><?php echo $search_query; ?>" class="pagination-btn">
+                    Next &raquo;
+                </a>
+                <?php else: ?>
+                <span class="pagination-btn disabled">Next &raquo;</span>
+                <?php endif; ?>
+
+            </div>
+        </nav>
+        <?php endif; ?>
+    </div>
+</body>
+</html>

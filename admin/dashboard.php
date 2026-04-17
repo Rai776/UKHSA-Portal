@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once '../config/db_connect.php';
+require_once '../config/supabase.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: ../login.php');
@@ -21,136 +21,110 @@ if ($hour < 12) {
     $greeting = 'Good evening';
 }
 
-$total_users_q = pg_query($conn, 'SELECT COUNT(*) as total FROM "User"');
-$total_users = intval(pg_fetch_assoc($total_users_q)['total']);
+$all_users     = supabaseRequest('User?select=job_type,training_completed');
+$total_users   = count($all_users);
+$researchers   = count(array_filter($all_users, fn($u) => $u['job_type'] === 'Researcher'));
+$staff_count   = count(array_filter($all_users, fn($u) => $u['job_type'] === 'Staff'));
+$interns       = count(array_filter($all_users, fn($u) => $u['job_type'] === 'Intern'));
+$trained       = count(array_filter($all_users, fn($u) => $u['training_completed'] === true));
+$untrained     = $total_users - $trained;
 
-$researchers_q = pg_query_params(
-    $conn,
-    'SELECT COUNT(*) as total FROM "User" WHERE job_type = $1',
-    ['Researcher']
-);
-$researchers = intval(pg_fetch_assoc($researchers_q)['total']);
-
-$staff_q = pg_query_params(
-    $conn,
-    'SELECT COUNT(*) as total FROM "User" WHERE job_type = $1',
-    ['Staff']
-);
-$staff_count = intval(pg_fetch_assoc($staff_q)['total']);
-
-$interns_q = pg_query_params(
-    $conn,
-    'SELECT COUNT(*) as total FROM "User" WHERE job_type = $1',
-    ['Intern']
-);
-$interns = intval(pg_fetch_assoc($interns_q)['total']);
-
-$trained_q = pg_query_params(
-    $conn,
-    'SELECT COUNT(*) as total FROM "User" WHERE training_completed = $1',
-    ['t']
-);
-$trained = intval(pg_fetch_assoc($trained_q)['total']);
-$untrained = $total_users - $trained;
-
-$total_datasets_q = pg_query($conn, 'SELECT COUNT(*) as total FROM "Dataset"');
-$total_datasets = intval(pg_fetch_assoc($total_datasets_q)['total']);
-
-$sensitive_q = pg_query_params(
-    $conn,
-    'SELECT COUNT(*) as total FROM "Dataset" WHERE sensitivity = $1',
-    ['Sensitive']
-);
-$sensitive_datasets = intval(pg_fetch_assoc($sensitive_q)['total']);
+$all_datasets       = supabaseRequest('Dataset?select=sensitivity');
+$total_datasets     = count($all_datasets);
+$sensitive_datasets = count(array_filter($all_datasets, fn($d) => $d['sensitivity'] === 'Sensitive'));
 $non_sensitive_datasets = $total_datasets - $sensitive_datasets;
 
-$total_requests_q = pg_query($conn, 'SELECT COUNT(*) as total FROM "Access_Request"');
-$total_requests = intval(pg_fetch_assoc($total_requests_q)['total']);
+$all_requests     = supabaseRequest('Access_Request?select=request_id,request_status,request_date');
+$total_requests   = count($all_requests);
+$pending_requests = count(array_filter($all_requests, fn($r) => $r['request_status'] === 'Pending'));
+$approved_requests = count(array_filter($all_requests, fn($r) => $r['request_status'] === 'Approved'));
+$rejected_requests = count(array_filter($all_requests, fn($r) => $r['request_status'] === 'Rejected'));
 
-$pending_q = pg_query_params(
-    $conn,
-    'SELECT COUNT(*) as total FROM "Access_Request" WHERE request_status = $1',
-    ['Pending']
-);
-$pending_requests = intval(pg_fetch_assoc($pending_q)['total']);
+$six_months_ago  = date('Y-m-d', strtotime('-6 months'));
+$monthly_data    = [];
 
-$approved_q = pg_query_params(
-    $conn,
-    'SELECT COUNT(*) as total FROM "Access_Request" WHERE request_status = $1',
-    ['Approved']
-);
-$approved_requests = intval(pg_fetch_assoc($approved_q)['total']);
+foreach ($all_requests as $req) {
+    if (empty($req['request_date'])) continue;
 
-$rejected_q = pg_query_params(
-    $conn,
-    'SELECT COUNT(*) as total FROM "Access_Request" WHERE request_status = $1',
-    ['Rejected']
-);
-$rejected_requests = intval(pg_fetch_assoc($rejected_q)['total']);
+    $req_date = substr($req['request_date'], 0, 10);
+    if ($req_date < $six_months_ago) continue;
 
-$monthly_query = "
-    SELECT 
-        TO_CHAR(request_date, 'Mon YYYY') as month_label,
-        TO_CHAR(request_date, 'YYYY-MM') as month_sort,
-        COUNT(*) as total,
-        SUM(CASE WHEN request_status = 'Approved' THEN 1 ELSE 0 END) as approved,
-        SUM(CASE WHEN request_status = 'Pending' THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN request_status = 'Rejected' THEN 1 ELSE 0 END) as rejected
-    FROM \"Access_Request\"
-    WHERE request_date >= NOW() - INTERVAL '6 months'
-    GROUP BY month_label, month_sort
-    ORDER BY month_sort ASC
-";
-$monthly_result = pg_query($conn, $monthly_query);
-$chart_labels = [];
-$chart_approved = [];
-$chart_pending = [];
-$chart_rejected = [];
-if ($monthly_result) {
-    while ($row = pg_fetch_assoc($monthly_result)) {
-        $chart_labels[]   = $row['month_label'];
-        $chart_approved[] = intval($row['approved']);
-        $chart_pending[]  = intval($row['pending']);
-        $chart_rejected[] = intval($row['rejected']);
+    $month_sort  = substr($req['request_date'], 0, 7);
+    $month_label = date('M Y', strtotime($req_date));
+
+    if (!isset($monthly_data[$month_sort])) {
+        $monthly_data[$month_sort] = [
+            'label'    => $month_label,
+            'approved' => 0,
+            'pending'  => 0,
+            'rejected' => 0
+        ];
     }
+
+    $status = $req['request_status'];
+    if ($status === 'Approved') $monthly_data[$month_sort]['approved']++;
+    if ($status === 'Pending')  $monthly_data[$month_sort]['pending']++;
+    if ($status === 'Rejected') $monthly_data[$month_sort]['rejected']++;
 }
 
-$top_datasets_query = '
-    SELECT d.name, d.sensitivity, COUNT(ar.request_id) as request_count
-    FROM "Access_Request" ar
-    JOIN "Dataset" d ON ar.dataset_id = d.dataset_id
-    GROUP BY d.name, d.sensitivity
-    ORDER BY request_count DESC
-    LIMIT 5
-';
-$top_datasets_result = pg_query($conn, $top_datasets_query);
+ksort($monthly_data);
+
+$chart_labels   = [];
+$chart_approved = [];
+$chart_pending  = [];
+$chart_rejected = [];
+
+foreach ($monthly_data as $month) {
+    $chart_labels[]   = $month['label'];
+    $chart_approved[] = $month['approved'];
+    $chart_pending[]  = $month['pending'];
+    $chart_rejected[]  = $month['rejected'];
+}
+
+$all_requests_ds = supabaseRequest('Access_Request?select=dataset_id');
+$dataset_counts  = [];
+
+foreach ($all_requests_ds as $req) {
+    $did = $req['dataset_id'];
+    $dataset_counts[$did] = ($dataset_counts[$did] ?? 0) + 1;
+}
+
+arsort($dataset_counts);
+$top_dataset_ids = array_slice(array_keys($dataset_counts), 0, 5, true);
+
 $top_ds_labels = [];
 $top_ds_counts = [];
 $top_ds_colors = [];
-if ($top_datasets_result) {
-    while ($row = pg_fetch_assoc($top_datasets_result)) {
-        $top_ds_labels[] = $row['name'];
-        $top_ds_counts[] = intval($row['request_count']);
-        $top_ds_colors[] = $row['sensitivity'] === 'Sensitive' ? '#d4351c' : '#00703c';
+
+foreach ($top_dataset_ids as $did) {
+    $ds = supabaseRequest('Dataset?select=name,sensitivity&dataset_id=eq.' . $did);
+    if (!empty($ds) && !isset($ds['error'])) {
+        $top_ds_labels[] = $ds[0]['name'];
+        $top_ds_counts[] = $dataset_counts[$did];
+        $top_ds_colors[] = $ds[0]['sensitivity'] === 'Sensitive' ? '#d4351c' : '#00703c';
     }
 }
 
-$team_query = '
-    SELECT u.team, COUNT(ar.request_id) as request_count
-    FROM "Access_Request" ar
-    JOIN "User" u ON ar.user_id = u.user_id
-    GROUP BY u.team
-    ORDER BY request_count DESC
-';
-$team_result = pg_query($conn, $team_query);
-$team_labels = [];
-$team_counts = [];
-if ($team_result) {
-    while ($row = pg_fetch_assoc($team_result)) {
-        $team_labels[] = $row['team'] ?? 'Unknown';
-        $team_counts[] = intval($row['request_count']);
+$all_requests_team = supabaseRequest('Access_Request?select=user_id');
+$user_request_map  = [];
+
+foreach ($all_requests_team as $req) {
+    $uid = $req['user_id'];
+    $user_request_map[$uid] = ($user_request_map[$uid] ?? 0) + 1;
+}
+
+$team_counts_map = [];
+foreach ($user_request_map as $uid => $count) {
+    $u = supabaseRequest('User?select=team&user_id=eq.' . $uid);
+    if (!empty($u) && !isset($u['error'])) {
+        $team = $u[0]['team'] ?? 'Unknown';
+        $team_counts_map[$team] = ($team_counts_map[$team] ?? 0) + $count;
     }
 }
+
+arsort($team_counts_map);
+$team_labels = array_keys($team_counts_map);
+$team_counts = array_values($team_counts_map);
 ?>
 
 <!DOCTYPE html>
@@ -167,7 +141,6 @@ if ($team_result) {
 </head>
 
 <body>
-
     <?php include("navbar.php"); ?>
 
     <main class="dashboard-main">
@@ -243,6 +216,7 @@ if ($team_result) {
                     </div>
                 </div>
             </div>
+
             <div class="section-header">
                 <h2>Analytics & Reporting</h2>
             </div>
@@ -255,7 +229,6 @@ if ($team_result) {
                         <canvas id="requestsOverTimeChart"></canvas>
                     </div>
                 </div>
-
                 <div class="chart-card">
                     <h3>Request Status</h3>
                     <p class="chart-desc">Overall distribution of request outcomes</p>
@@ -273,7 +246,6 @@ if ($team_result) {
                         <canvas id="topDatasetsChart"></canvas>
                     </div>
                 </div>
-
                 <div class="chart-card">
                     <h3>Requests by Team</h3>
                     <p class="chart-desc">Which teams are requesting the most access</p>
@@ -291,7 +263,6 @@ if ($team_result) {
                         <canvas id="sensitivityChart"></canvas>
                     </div>
                 </div>
-
                 <div class="chart-card">
                     <h3>Users by Job Type</h3>
                     <p class="chart-desc">Distribution of users across job types</p>
@@ -316,7 +287,6 @@ if ($team_result) {
                         <span class="action-badge"><?php echo $pending_requests; ?></span>
                     <?php endif; ?>
                 </a>
-
                 <a href="dataset_rules.php" class="action-card">
                     <span class="material-icons">rule</span>
                     <div>
@@ -324,7 +294,6 @@ if ($team_result) {
                         <p>Manage datasets and auto-approval rules</p>
                     </div>
                 </a>
-
                 <a href="audit_log.php" class="action-card">
                     <span class="material-icons">history</span>
                     <div>
@@ -357,6 +326,7 @@ if ($team_result) {
 
         </div>
     </main>
+
     <script>
         Chart.defaults.font.family = "'GDS Transport', Arial, sans-serif";
         Chart.defaults.font.size = 12;
@@ -366,24 +336,21 @@ if ($team_result) {
             data: {
                 labels: <?php echo json_encode($chart_labels); ?>,
                 datasets: [{
-                        label: 'Approved',
-                        data: <?php echo json_encode($chart_approved); ?>,
-                        backgroundColor: '#00703c',
-                        borderRadius: 2
-                    },
-                    {
-                        label: 'Pending',
-                        data: <?php echo json_encode($chart_pending); ?>,
-                        backgroundColor: '#f47738',
-                        borderRadius: 2
-                    },
-                    {
-                        label: 'Rejected',
-                        data: <?php echo json_encode($chart_rejected); ?>,
-                        backgroundColor: '#d4351c',
-                        borderRadius: 2
-                    }
-                ]
+                    label: 'Approved',
+                    data: <?php echo json_encode($chart_approved); ?>,
+                    backgroundColor: '#00703c',
+                    borderRadius: 2
+                }, {
+                    label: 'Pending',
+                    data: <?php echo json_encode($chart_pending); ?>,
+                    backgroundColor: '#f47738',
+                    borderRadius: 2
+                }, {
+                    label: 'Rejected',
+                    data: <?php echo json_encode($chart_rejected); ?>,
+                    backgroundColor: '#d4351c',
+                    borderRadius: 2
+                }]
             },
             options: {
                 responsive: true,
