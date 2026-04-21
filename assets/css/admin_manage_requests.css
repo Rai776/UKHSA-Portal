@@ -1304,3 +1304,39 @@ body {
     cursor: not-allowed;
     opacity: 0.7;
 }
+
+.approved-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.btn-revoke {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    font-family: var(--govuk-font);
+    color: var(--govuk-white);
+    background-color: #d4351c;
+    border: none;
+    border-bottom: 2px solid #8b0000;
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+}
+
+.btn-revoke:hover {
+    background-color: #8b0000;
+}
+
+.btn-revoke:focus {
+    outline: 3px solid var(--govuk-focus);
+    outline-offset: 0;
+}
+
+.btn-revoke .material-icons {
+    font-size: 1rem;
+}

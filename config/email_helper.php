@@ -9,7 +9,8 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
-function sendEmail($to_email, $to_name, $subject, $html_body) {
+function sendEmail($to_email, $to_name, $subject, $html_body)
+{
     if (!MAIL_ENABLED) {
         error_log('[Email] Email is disabled in config.');
         return false;
@@ -42,7 +43,6 @@ function sendEmail($to_email, $to_name, $subject, $html_body) {
         $mail->send();
         error_log('[Email] Sent successfully to ' . $to_email . ' — ' . $subject);
         return true;
-
     } catch (Exception $e) {
         error_log('[Email] Failed to send to ' . $to_email . ' — ' . $mail->ErrorInfo);
         return false;
@@ -50,7 +50,8 @@ function sendEmail($to_email, $to_name, $subject, $html_body) {
 }
 
 
-function emailLayout($content, $border_color = '#1D70B8') {
+function emailLayout($content, $border_color = '#1D70B8')
+{
     return '
     <!DOCTYPE html>
     <html lang="en">
@@ -98,7 +99,8 @@ function emailLayout($content, $border_color = '#1D70B8') {
     </html>';
 }
 
-function sendApprovalEmail($to_email, $to_name, $dataset_name, $expiry_date) {
+function sendApprovalEmail($to_email, $to_name, $dataset_name, $expiry_date)
+{
     $subject = '[UKHSA Portal] Access Approved — ' . $dataset_name;
 
     $content = '
@@ -139,7 +141,8 @@ function sendApprovalEmail($to_email, $to_name, $dataset_name, $expiry_date) {
     return sendEmail($to_email, $to_name, $subject, emailLayout($content, '#00703c'));
 }
 
-function sendRejectionEmail($to_email, $to_name, $dataset_name, $reason) {
+function sendRejectionEmail($to_email, $to_name, $dataset_name, $reason)
+{
     $subject = '[UKHSA Portal] Access Request Rejected — ' . $dataset_name;
 
     $content = '
@@ -179,7 +182,8 @@ function sendRejectionEmail($to_email, $to_name, $dataset_name, $reason) {
     return sendEmail($to_email, $to_name, $subject, emailLayout($content, '#d4351c'));
 }
 
-function sendAccessExpiryEmail($to_email, $to_name, $dataset_name, $expiry_date, $days_left) {
+function sendAccessExpiryEmail($to_email, $to_name, $dataset_name, $expiry_date, $days_left)
+{
     $subject       = '[UKHSA Portal] Access Expiring in ' . $days_left . ' Day' . ($days_left > 1 ? 's' : '') . ' — ' . $dataset_name;
     $urgency_color = $days_left <= 1 ? '#d4351c' : '#f47738';
 
@@ -222,7 +226,8 @@ function sendAccessExpiryEmail($to_email, $to_name, $dataset_name, $expiry_date,
 }
 
 
-function sendTrainingExpiryEmail($to_email, $to_name, $expiry_date, $days_left) {
+function sendTrainingExpiryEmail($to_email, $to_name, $expiry_date, $days_left)
+{
     $subject       = '[UKHSA Portal] Training Certification Expiring in ' . $days_left . ' Day' . ($days_left > 1 ? 's' : '');
     $urgency_color = $days_left <= 3 ? '#d4351c' : '#f47738';
 
@@ -272,4 +277,55 @@ function sendTrainingExpiryEmail($to_email, $to_name, $expiry_date, $days_left) 
 
     return sendEmail($to_email, $to_name, $subject, emailLayout($content, $urgency_color));
 }
-?>
+
+function sendRevokeEmail($to_email, $to_name, $dataset_name, $revoked_by)
+{
+    $subject = '[UKHSA Portal] Access Revoked — ' . $dataset_name;
+
+    $content = '
+        <h2 style="color:#d4351c; margin-top:0;">✗ Dataset Access Revoked</h2>
+        <p style="color:#0b0c0c;">Dear <strong>' . htmlspecialchars($to_name) . '</strong>,</p>
+        <p style="color:#0b0c0c;">
+            Your access to the dataset 
+            <strong>' . htmlspecialchars($dataset_name) . '</strong> 
+            has been <strong style="color:#d4351c;">revoked</strong>.
+        </p>
+
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0; border-collapse: collapse;">
+            <tr style="background-color:#f3f2f1;">
+                <td style="padding:12px; font-weight:bold; width:40%; border-bottom:1px solid #b1b4b6;">Dataset</td>
+                <td style="padding:12px; border-bottom:1px solid #b1b4b6;">' . htmlspecialchars($dataset_name) . '</td>
+            </tr>
+            <tr>
+                <td style="padding:12px; font-weight:bold; border-bottom:1px solid #b1b4b6;">Status</td>
+                <td style="padding:12px; border-bottom:1px solid #b1b4b6; color:#d4351c; font-weight:bold;">Revoked</td>
+            </tr>
+            <tr style="background-color:#f3f2f1;">
+                <td style="padding:12px; font-weight:bold; border-bottom:1px solid #b1b4b6;">Revoked By</td>
+                <td style="padding:12px; border-bottom:1px solid #b1b4b6;">' . htmlspecialchars($revoked_by) . '</td>
+            </tr>
+            <tr>
+                <td style="padding:12px; font-weight:bold;">Date</td>
+                <td style="padding:12px;">' . date('d M Y, H:i') . '</td>
+            </tr>
+        </table>
+
+        <div style="background-color:#fff4e6; border-left:4px solid #f47738; padding:15px; margin:20px 0;">
+            <p style="margin:0; color:#6e3b00; font-size:0.9rem;">
+                <strong>Note:</strong> If you believe this is an error or wish to request access again, 
+                please submit a new access request through the portal with a detailed justification.
+            </p>
+        </div>
+
+        <p style="color:#0b0c0c;">
+            You will no longer be able to access this dataset until a new request has been approved.
+        </p>
+
+        <a href="' . PORTAL_URL . '/user/datasets.php" 
+           style="display:inline-block; padding:12px 24px; background-color:#1D70B8; color:#ffffff; text-decoration:none; font-weight:bold; margin-top:10px;">
+            Request Access Again
+        </a>
+    ';
+
+    return sendEmail($to_email, $to_name, $subject, emailLayout($content, '#d4351c'));
+}

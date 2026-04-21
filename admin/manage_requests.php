@@ -6,7 +6,7 @@ if (!isset($_SESSION['user_id'])) {
     header('Location: ../login.php');
     exit();
 }
-if ($_SESSION['role'] !== 'Administrator') {
+if ($_SESSION['role'] !== 'Administrator' && $_SESSION['role'] !== 'Approver') {
     header('Location: ../user/dashboard.php');
     exit();
 }
@@ -239,8 +239,8 @@ function buildURL($overrides = [])
                                     <?php else: ?>
                                         <p>No <?php echo strtolower($filter_status); ?> sensitive requests found.</p>
                                     <?php endif; ?>
-                                 </td>
-                             </tr>
+                                </td>
+                            </tr>
                         <?php else: ?>
                             <?php foreach ($requests as $req): ?>
                                 <tr>
@@ -251,7 +251,7 @@ function buildURL($overrides = [])
                                                 <?php echo htmlspecialchars($req['team'] ?? 'N/A'); ?> · <?php echo htmlspecialchars($req['job_type']); ?>
                                             </span>
                                         </div>
-                                     </td>
+                                    </td>
 
                                     <td data-label="Dataset">
                                         <div class="dataset-info">
@@ -260,14 +260,14 @@ function buildURL($overrides = [])
                                                 <span class="material-icons">lock</span> Sensitive
                                             </span>
                                         </div>
-                                     </td>
+                                    </td>
 
                                     <td data-label="Purpose">
                                         <div class="purpose-text" title="<?php echo htmlspecialchars($req['purpose']); ?>">
                                             <?php echo htmlspecialchars(substr($req['purpose'], 0, 80)); ?>
                                             <?php if (strlen($req['purpose']) > 80) echo '...'; ?>
                                         </div>
-                                     </td>
+                                    </td>
 
                                     <td data-label="Training">
                                         <?php if ($req['training_completed'] === true || $req['training_completed'] === 't'): ?>
@@ -279,18 +279,18 @@ function buildURL($overrides = [])
                                                 <span class="material-icons">cancel</span> Incomplete
                                             </span>
                                         <?php endif; ?>
-                                     </td>
+                                    </td>
 
                                     <td data-label="Date" class="date-cell">
                                         <?php echo date('d M Y', strtotime($req['request_date'])); ?>
                                         <span class="time-sub"><?php echo date('H:i', strtotime($req['request_date'])); ?></span>
-                                     </td>
+                                    </td>
 
                                     <td data-label="Status">
                                         <span class="status-badge <?php echo strtolower($req['request_status']); ?>">
                                             <?php echo $req['request_status']; ?>
                                         </span>
-                                     </td>
+                                    </td>
 
                                     <td data-label="Actions">
                                         <div class="action-buttons">
@@ -308,14 +308,26 @@ function buildURL($overrides = [])
                                                 </button>
 
                                             <?php elseif ($req['request_status'] === 'Approved'): ?>
-                                                <div class="action-info approved-info">
-                                                    <span class="material-icons">event</span>
-                                                    <div>
-                                                        <span class="info-label">Expires</span>
-                                                        <span class="info-value">
-                                                            <?php echo $req['expiry_date'] ? date('d M Y', strtotime($req['expiry_date'])) : 'N/A'; ?>
-                                                        </span>
+                                                <div class="approved-actions">
+                                                    <div class="action-info approved-info">
+                                                        <span class="material-icons">event</span>
+                                                        <div>
+                                                            <span class="info-label">Expires</span>
+                                                            <span class="info-value">
+                                                                <?php echo $req['expiry_date'] ? date('d M Y', strtotime($req['expiry_date'])) : 'N/A'; ?>
+                                                            </span>
+                                                        </div>
                                                     </div>
+                                                    <button
+                                                        type="button"
+                                                        class="btn-action btn-revoke"
+                                                        onclick="openRevokeModal(
+                                                            <?php echo $req['request_id']; ?>,
+                                                            '<?php echo htmlspecialchars(addslashes($req['full_name'])); ?>',
+                                                            '<?php echo htmlspecialchars(addslashes($req['dataset_name'])); ?>'
+                                                        )">
+                                                        <span class="material-icons">block</span> Revoke
+                                                    </button>
                                                 </div>
 
                                             <?php elseif ($req['request_status'] === 'Rejected'): ?>
@@ -331,8 +343,8 @@ function buildURL($overrides = [])
                                                 </div>
                                             <?php endif; ?>
                                         </div>
-                                     </td>
-                                 </tr>
+                                    </td>
+                                </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
@@ -387,6 +399,42 @@ function buildURL($overrides = [])
         </div>
     </main>
 
+    <div id="revokeModal" class="modal-overlay" style="display:none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-header-content">
+                    <span class="material-icons modal-header-icon">block</span>
+                    <h2>Revoke Dataset Access</h2>
+                </div>
+                <button type="button" class="modal-close" onclick="closeRevokeModal()">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <form action="../actions/admin_revoke_action.php" method="POST" id="revokeForm">
+                <input type="hidden" name="request_id" id="revoke_request_id">
+                <div class="modal-body">
+                    <div class="modal-warning">
+                        <span class="material-icons">warning_amber</span>
+                        <span>This will immediately revoke access. The user will be notified by email.</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="revoke_requester">Requester</label>
+                        <input type="text" id="revoke_requester" class="form-input" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="revoke_dataset">Dataset</label>
+                        <input type="text" id="revoke_dataset" class="form-input" readonly>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" onclick="closeRevokeModal()">Cancel</button>
+                    <button type="submit" name="revoke" class="btn-confirm-reject" id="confirmRevokeBtn">
+                        <span class="material-icons">block</span> Confirm Revoke
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
     <div id="rejectModal" class="modal-overlay" style="display:none;">
         <div class="modal-card">
             <div class="modal-header">
@@ -483,6 +531,37 @@ function buildURL($overrides = [])
             }
             rejectSubmitted = true;
             var btn = document.getElementById('confirmRejectBtn');
+            btn.innerHTML = '<span class="material-icons">hourglass_empty</span> Processing...';
+            btn.style.backgroundColor = '#b1b4b6';
+            btn.style.cursor = 'not-allowed';
+        });
+
+        // Revoke Modal
+        function openRevokeModal(requestId, requesterName, datasetName) {
+            document.getElementById('revoke_request_id').value = requestId;
+            document.getElementById('revoke_requester').value = requesterName;
+            document.getElementById('revoke_dataset').value = datasetName;
+            document.getElementById('revokeModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeRevokeModal() {
+            document.getElementById('revokeModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        document.getElementById('revokeModal').addEventListener('click', function(e) {
+            if (e.target === this) closeRevokeModal();
+        });
+
+        var revokeSubmitted = false;
+        document.getElementById('revokeForm').addEventListener('submit', function(e) {
+            if (revokeSubmitted) {
+                e.preventDefault();
+                return false;
+            }
+            revokeSubmitted = true;
+            var btn = document.getElementById('confirmRevokeBtn');
             btn.innerHTML = '<span class="material-icons">hourglass_empty</span> Processing...';
             btn.style.backgroundColor = '#b1b4b6';
             btn.style.cursor = 'not-allowed';

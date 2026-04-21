@@ -55,13 +55,13 @@ if ($user && password_verify($password, $user['password_hash'])) {
         ]
     );
 
-    if ($user['system_role'] === 'Administrator') {
+    if ($user['system_role'] === 'Administrator' || $user['system_role'] === 'Approver') {
         header('Location: ../admin/dashboard.php');
     } else {
         header('Location: ../user/dashboard.php');
     }
     exit();
-
+    
 } else {
 
     $_SESSION['login_error']    = 'Invalid username or password.';
@@ -81,4 +81,3 @@ if ($user && password_verify($password, $user['password_hash'])) {
     header('Location: ../login.php');
     exit();
 }
-?>

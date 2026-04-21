@@ -7,7 +7,7 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-if ($_SESSION['role'] !== 'Administrator') {
+if ($_SESSION['role'] !== 'Administrator' && $_SESSION['role'] !== 'Approver') {
     header('Location: ../user/dashboard.php');
     exit();
 }
@@ -21,6 +21,9 @@ if ($hour < 12) {
     $greeting = 'Good evening';
 }
 
+$is_admin    = $_SESSION['role'] === 'Administrator';
+$is_approver = $_SESSION['role'] === 'Approver';
+
 $all_users     = supabaseRequest('User?select=job_type,training_completed');
 $total_users   = count($all_users);
 $researchers   = count(array_filter($all_users, fn($u) => $u['job_type'] === 'Researcher'));
@@ -29,19 +32,19 @@ $interns       = count(array_filter($all_users, fn($u) => $u['job_type'] === 'In
 $trained       = count(array_filter($all_users, fn($u) => $u['training_completed'] === true));
 $untrained     = $total_users - $trained;
 
-$all_datasets       = supabaseRequest('Dataset?select=sensitivity');
-$total_datasets     = count($all_datasets);
-$sensitive_datasets = count(array_filter($all_datasets, fn($d) => $d['sensitivity'] === 'Sensitive'));
+$all_datasets           = supabaseRequest('Dataset?select=sensitivity');
+$total_datasets         = count($all_datasets);
+$sensitive_datasets     = count(array_filter($all_datasets, fn($d) => $d['sensitivity'] === 'Sensitive'));
 $non_sensitive_datasets = $total_datasets - $sensitive_datasets;
 
-$all_requests     = supabaseRequest('Access_Request?select=request_id,request_status,request_date');
-$total_requests   = count($all_requests);
-$pending_requests = count(array_filter($all_requests, fn($r) => $r['request_status'] === 'Pending'));
+$all_requests      = supabaseRequest('Access_Request?select=request_id,request_status,request_date');
+$total_requests    = count($all_requests);
+$pending_requests  = count(array_filter($all_requests, fn($r) => $r['request_status'] === 'Pending'));
 $approved_requests = count(array_filter($all_requests, fn($r) => $r['request_status'] === 'Approved'));
 $rejected_requests = count(array_filter($all_requests, fn($r) => $r['request_status'] === 'Rejected'));
 
-$six_months_ago  = date('Y-m-d', strtotime('-6 months'));
-$monthly_data    = [];
+$six_months_ago = date('Y-m-d', strtotime('-6 months'));
+$monthly_data   = [];
 
 foreach ($all_requests as $req) {
     if (empty($req['request_date'])) continue;
@@ -146,6 +149,7 @@ $team_counts = array_values($team_counts_map);
     <main class="dashboard-main">
         <div class="dashboard-container">
 
+            <!-- Welcome Card -->
             <div class="welcome-card">
                 <div class="welcome-text">
                     <h1><?php echo $greeting; ?>, <?php echo htmlspecialchars($_SESSION['full_name']); ?></h1>
@@ -158,6 +162,7 @@ $team_counts = array_values($team_counts_map);
                 </div>
             </div>
 
+            <!-- Pending Banner -->
             <?php if ($pending_requests > 0): ?>
                 <div class="banner banner-warning">
                     <span class="material-icons">pending_actions</span>
@@ -168,6 +173,7 @@ $team_counts = array_values($team_counts_map);
                 </div>
             <?php endif; ?>
 
+            <!-- System Overview — Both Admin and Approver -->
             <div class="section-header">
                 <h2>System Overview</h2>
             </div>
@@ -217,66 +223,74 @@ $team_counts = array_values($team_counts_map);
                 </div>
             </div>
 
-            <div class="section-header">
-                <h2>Analytics & Reporting</h2>
-            </div>
+            <!-- Analytics — Admin only -->
+            <?php if ($is_admin): ?>
 
-            <div class="charts-grid">
-                <div class="chart-card">
-                    <h3>Requests Over Time</h3>
-                    <p class="chart-desc">Monthly breakdown of access requests by status</p>
-                    <div class="chart-wrapper">
-                        <canvas id="requestsOverTimeChart"></canvas>
-                    </div>
+                <div class="section-header">
+                    <h2>Analytics & Reporting</h2>
                 </div>
-                <div class="chart-card">
-                    <h3>Request Status</h3>
-                    <p class="chart-desc">Overall distribution of request outcomes</p>
-                    <div class="chart-wrapper">
-                        <canvas id="statusPieChart"></canvas>
-                    </div>
-                </div>
-            </div>
 
-            <div class="charts-grid">
-                <div class="chart-card">
-                    <h3>Top Requested Datasets</h3>
-                    <p class="chart-desc">Most popular datasets by number of requests</p>
-                    <div class="chart-wrapper">
-                        <canvas id="topDatasetsChart"></canvas>
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>Requests Over Time</h3>
+                        <p class="chart-desc">Monthly breakdown of access requests by status</p>
+                        <div class="chart-wrapper">
+                            <canvas id="requestsOverTimeChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Request Status</h3>
+                        <p class="chart-desc">Overall distribution of request outcomes</p>
+                        <div class="chart-wrapper">
+                            <canvas id="statusPieChart"></canvas>
+                        </div>
                     </div>
                 </div>
-                <div class="chart-card">
-                    <h3>Requests by Team</h3>
-                    <p class="chart-desc">Which teams are requesting the most access</p>
-                    <div class="chart-wrapper">
-                        <canvas id="teamChart"></canvas>
-                    </div>
-                </div>
-            </div>
 
-            <div class="charts-grid">
-                <div class="chart-card">
-                    <h3>Dataset Sensitivity</h3>
-                    <p class="chart-desc">Sensitive vs Non-sensitive datasets</p>
-                    <div class="chart-wrapper">
-                        <canvas id="sensitivityChart"></canvas>
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>Top Requested Datasets</h3>
+                        <p class="chart-desc">Most popular datasets by number of requests</p>
+                        <div class="chart-wrapper">
+                            <canvas id="topDatasetsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Requests by Team</h3>
+                        <p class="chart-desc">Which teams are requesting the most access</p>
+                        <div class="chart-wrapper">
+                            <canvas id="teamChart"></canvas>
+                        </div>
                     </div>
                 </div>
-                <div class="chart-card">
-                    <h3>Users by Job Type</h3>
-                    <p class="chart-desc">Distribution of users across job types</p>
-                    <div class="chart-wrapper">
-                        <canvas id="userTypeChart"></canvas>
-                    </div>
-                </div>
-            </div>
 
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>Dataset Sensitivity</h3>
+                        <p class="chart-desc">Sensitive vs Non-sensitive datasets</p>
+                        <div class="chart-wrapper">
+                            <canvas id="sensitivityChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Users by Job Type</h3>
+                        <p class="chart-desc">Distribution of users across job types</p>
+                        <div class="chart-wrapper">
+                            <canvas id="userTypeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+            <?php endif; ?>
+
+            <!-- Quick Actions -->
             <div class="section-header">
                 <h2>Quick Actions</h2>
             </div>
 
             <div class="actions-grid">
+
+                <!-- Manage Requests — Admin and Approver -->
                 <a href="manage_requests.php" class="action-card">
                     <span class="material-icons">pending_actions</span>
                     <div>
@@ -287,272 +301,290 @@ $team_counts = array_values($team_counts_map);
                         <span class="action-badge"><?php echo $pending_requests; ?></span>
                     <?php endif; ?>
                 </a>
-                <a href="dataset_rules.php" class="action-card">
-                    <span class="material-icons">rule</span>
-                    <div>
-                        <strong>Dataset & Rules</strong>
-                        <p>Manage datasets and auto-approval rules</p>
-                    </div>
-                </a>
-                <a href="audit_log.php" class="action-card">
-                    <span class="material-icons">history</span>
-                    <div>
-                        <strong>Audit Trail</strong>
-                        <p>View all system activity and user actions</p>
-                    </div>
-                </a>
+
+                <!-- Admin only actions -->
+                <?php if ($is_admin): ?>
+                    <a href="rules_management.php" class="action-card">
+                        <span class="material-icons">rule</span>
+                        <div>
+                            <strong>Dataset & Rules</strong>
+                            <p>Manage datasets and auto-approval rules</p>
+                        </div>
+                    </a>
+                    <a href="audit_trail.php" class="action-card">
+                        <span class="material-icons">history</span>
+                        <div>
+                            <strong>Audit Trail</strong>
+                            <p>View all system activity and user actions</p>
+                        </div>
+                    </a>
+                    <a href="user_management.php" class="action-card">
+                        <span class="material-icons">manage_accounts</span>
+                        <div>
+                            <strong>User Management</strong>
+                            <p>Manage user roles and access levels</p>
+                        </div>
+                    </a>
+                <?php endif; ?>
+
             </div>
 
-            <div class="section-header">
-                <h2>Training Overview</h2>
-            </div>
+            <!-- Training Overview — Admin only -->
+            <?php if ($is_admin): ?>
+                <div class="section-header">
+                    <h2>Training Overview</h2>
+                </div>
 
-            <div class="training-grid">
-                <div class="training-card trained">
-                    <span class="material-icons">school</span>
-                    <div>
-                        <span class="training-number"><?php echo $trained; ?></span>
-                        <span class="training-label">Training Completed</span>
+                <div class="training-grid">
+                    <div class="training-card trained">
+                        <span class="material-icons">school</span>
+                        <div>
+                            <span class="training-number"><?php echo $trained; ?></span>
+                            <span class="training-label">Training Completed</span>
+                        </div>
+                    </div>
+                    <div class="training-card untrained">
+                        <span class="material-icons">warning</span>
+                        <div>
+                            <span class="training-number"><?php echo $untrained; ?></span>
+                            <span class="training-label">Training Incomplete</span>
+                        </div>
                     </div>
                 </div>
-                <div class="training-card untrained">
-                    <span class="material-icons">warning</span>
-                    <div>
-                        <span class="training-number"><?php echo $untrained; ?></span>
-                        <span class="training-label">Training Incomplete</span>
-                    </div>
-                </div>
-            </div>
+            <?php endif; ?>
 
         </div>
     </main>
 
-    <script>
-        Chart.defaults.font.family = "'GDS Transport', Arial, sans-serif";
-        Chart.defaults.font.size = 12;
+    <!-- Charts — Admin only -->
+    <?php if ($is_admin): ?>
+        <script>
+            Chart.defaults.font.family = "'GDS Transport', Arial, sans-serif";
+            Chart.defaults.font.size = 12;
 
-        new Chart(document.getElementById('requestsOverTimeChart'), {
-            type: 'bar',
-            data: {
-                labels: <?php echo json_encode($chart_labels); ?>,
-                datasets: [{
-                    label: 'Approved',
-                    data: <?php echo json_encode($chart_approved); ?>,
-                    backgroundColor: '#00703c',
-                    borderRadius: 2
-                }, {
-                    label: 'Pending',
-                    data: <?php echo json_encode($chart_pending); ?>,
-                    backgroundColor: '#f47738',
-                    borderRadius: 2
-                }, {
-                    label: 'Rejected',
-                    data: <?php echo json_encode($chart_rejected); ?>,
-                    backgroundColor: '#d4351c',
-                    borderRadius: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            usePointStyle: true,
-                            padding: 15
-                        }
-                    }
+            new Chart(document.getElementById('requestsOverTimeChart'), {
+                type: 'bar',
+                data: {
+                    labels: <?php echo json_encode($chart_labels); ?>,
+                    datasets: [{
+                        label: 'Approved',
+                        data: <?php echo json_encode($chart_approved); ?>,
+                        backgroundColor: '#00703c',
+                        borderRadius: 2
+                    }, {
+                        label: 'Pending',
+                        data: <?php echo json_encode($chart_pending); ?>,
+                        backgroundColor: '#f47738',
+                        borderRadius: 2
+                    }, {
+                        label: 'Rejected',
+                        data: <?php echo json_encode($chart_rejected); ?>,
+                        backgroundColor: '#d4351c',
+                        borderRadius: 2
+                    }]
                 },
-                scales: {
-                    x: {
-                        stacked: true,
-                        grid: {
-                            display: false
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15
+                            }
                         }
                     },
-                    y: {
-                        stacked: true,
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        }
-                    }
-                }
-            }
-        });
-
-        new Chart(document.getElementById('statusPieChart'), {
-            type: 'doughnut',
-            data: {
-                labels: ['Approved', 'Pending', 'Rejected'],
-                datasets: [{
-                    data: [
-                        <?php echo $approved_requests; ?>,
-                        <?php echo $pending_requests; ?>,
-                        <?php echo $rejected_requests; ?>
-                    ],
-                    backgroundColor: ['#00703c', '#f47738', '#d4351c'],
-                    borderWidth: 2,
-                    borderColor: '#ffffff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '60%',
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            usePointStyle: true,
-                            padding: 15
-                        }
-                    }
-                }
-            }
-        });
-
-        new Chart(document.getElementById('topDatasetsChart'), {
-            type: 'bar',
-            data: {
-                labels: <?php echo json_encode($top_ds_labels); ?>,
-                datasets: [{
-                    label: 'Requests',
-                    data: <?php echo json_encode($top_ds_counts); ?>,
-                    backgroundColor: <?php echo json_encode($top_ds_colors); ?>,
-                    borderRadius: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                indexAxis: 'y',
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                },
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: {
+                                display: false
+                            }
                         },
-                        grid: {
-                            display: false
-                        }
-                    },
-                    y: {
-                        ticks: {
-                            font: {
-                                size: 11
-                            },
-                            callback: function(value) {
-                                var label = this.getLabelForValue(value);
-                                return label.length > 25 ? label.substr(0, 25) + '...' : label;
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
                             }
                         }
                     }
                 }
-            }
-        });
+            });
 
-        new Chart(document.getElementById('teamChart'), {
-            type: 'bar',
-            data: {
-                labels: <?php echo json_encode($team_labels); ?>,
-                datasets: [{
-                    label: 'Requests',
-                    data: <?php echo json_encode($team_counts); ?>,
-                    backgroundColor: '#1D70B8',
-                    borderRadius: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
+            new Chart(document.getElementById('statusPieChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Approved', 'Pending', 'Rejected'],
+                    datasets: [{
+                        data: [
+                            <?php echo $approved_requests; ?>,
+                            <?php echo $pending_requests; ?>,
+                            <?php echo $rejected_requests; ?>
+                        ],
+                        backgroundColor: ['#00703c', '#f47738', '#d4351c'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
                 },
-                scales: {
-                    x: {
-                        grid: {
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        }
+                    }
+                }
+            });
+
+            new Chart(document.getElementById('topDatasetsChart'), {
+                type: 'bar',
+                data: {
+                    labels: <?php echo json_encode($top_ds_labels); ?>,
+                    datasets: [{
+                        label: 'Requests',
+                        data: <?php echo json_encode($top_ds_counts); ?>,
+                        backgroundColor: <?php echo json_encode($top_ds_colors); ?>,
+                        borderRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: {
                             display: false
                         }
                     },
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                font: {
+                                    size: 11
+                                },
+                                callback: function(value) {
+                                    var label = this.getLabelForValue(value);
+                                    return label.length > 25 ? label.substr(0, 25) + '...' : label;
+                                }
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
 
-        new Chart(document.getElementById('sensitivityChart'), {
-            type: 'pie',
-            data: {
-                labels: ['Sensitive', 'Non-sensitive'],
-                datasets: [{
-                    data: [
-                        <?php echo $sensitive_datasets; ?>,
-                        <?php echo $non_sensitive_datasets; ?>
-                    ],
-                    backgroundColor: ['#d4351c', '#00703c'],
-                    borderWidth: 2,
-                    borderColor: '#ffffff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            usePointStyle: true,
-                            padding: 15
+            new Chart(document.getElementById('teamChart'), {
+                type: 'bar',
+                data: {
+                    labels: <?php echo json_encode($team_labels); ?>,
+                    datasets: [{
+                        label: 'Requests',
+                        data: <?php echo json_encode($team_counts); ?>,
+                        backgroundColor: '#1D70B8',
+                        borderRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
 
-        new Chart(document.getElementById('userTypeChart'), {
-            type: 'doughnut',
-            data: {
-                labels: ['Researchers', 'Staff', 'Interns'],
-                datasets: [{
-                    data: [
-                        <?php echo $researchers; ?>,
-                        <?php echo $staff_count; ?>,
-                        <?php echo $interns; ?>
-                    ],
-                    backgroundColor: ['#1D70B8', '#00703c', '#f47738'],
-                    borderWidth: 2,
-                    borderColor: '#ffffff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '60%',
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            usePointStyle: true,
-                            padding: 15
+            new Chart(document.getElementById('sensitivityChart'), {
+                type: 'pie',
+                data: {
+                    labels: ['Sensitive', 'Non-sensitive'],
+                    datasets: [{
+                        data: [
+                            <?php echo $sensitive_datasets; ?>,
+                            <?php echo $non_sensitive_datasets; ?>
+                        ],
+                        backgroundColor: ['#d4351c', '#00703c'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15
+                            }
                         }
                     }
                 }
-            }
-        });
-    </script>
+            });
+
+            new Chart(document.getElementById('userTypeChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Researchers', 'Staff', 'Interns'],
+                    datasets: [{
+                        data: [
+                            <?php echo $researchers; ?>,
+                            <?php echo $staff_count; ?>,
+                            <?php echo $interns; ?>
+                        ],
+                        backgroundColor: ['#1D70B8', '#00703c', '#f47738'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        }
+                    }
+                }
+            });
+        </script>
+    <?php endif; ?>
 
 </body>
 
