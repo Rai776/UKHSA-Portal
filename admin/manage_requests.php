@@ -198,7 +198,7 @@ function buildURL($overrides = [])
                         <input type="text"
                             name="search"
                             class="search-input"
-                            placeholder="Search by name, dataset, team, or purpose..."
+                            placeholder="Search by name, dataset, or purpose..."
                             value="<?php echo htmlspecialchars($search_term); ?>">
                         <button type="submit" class="search-btn">
                             <span class="material-icons">search</span> Search
