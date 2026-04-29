@@ -31,7 +31,7 @@ $is_approver = ($_SESSION['role'] ?? '') === 'Approver';
         <?php if ($is_admin): ?>
         <div>
             <a href="rules_management.php" class="option">
-                <div class="material-icons icon-item">rule</div> Dataset & Rules
+                <div class="material-icons icon-item">rule</div> Dataset
             </a>
         </div>
         <div>
